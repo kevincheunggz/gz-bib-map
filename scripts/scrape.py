@@ -235,6 +235,8 @@ def save(meta, rows):
         except Exception:
             pass
     DATA.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n", "utf-8")
+    (DATA.parent / "meta.json").write_text(json.dumps(
+        {"updated": data["updated"], "list_updated": data["list_updated"], "count": data["count"]}) + "\n", "utf-8")
 
 
 # ---------------------------------------------------------------- 主流程

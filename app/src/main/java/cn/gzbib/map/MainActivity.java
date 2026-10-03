@@ -104,6 +104,14 @@ public class MainActivity extends Activity {
 
         if (HOME_HOST.equals(host)) return false;
 
+        if ("geo".equals(scheme)) {
+            // 海外餐厅：交给手机上的地图 App（谷歌地图、高德等）；没有地图 App 时打开谷歌地图网页
+            String ll = uri.getSchemeSpecificPart().split("\\?")[0];
+            Uri web = Uri.parse("https://www.google.com/maps/search/?api=1&query=" + Uri.encode(ll));
+            open(new Intent(Intent.ACTION_VIEW, uri), web);
+            return true;
+        }
+
         if ("tel".equals(scheme)) {
             open(new Intent(Intent.ACTION_DIAL, uri), null);
             return true;

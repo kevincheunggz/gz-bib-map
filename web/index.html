@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>广州必比登</title>
+<title>米其林地图</title>
 <style>
   :root{
     --red:#c8102e; --navy:#1f4e79; --ink:#1d1d1f; --muted:#6b6b70; --line:#e6e3df;
     --bg:#faf8f5; --card:#ffffff; --chip:#f1ede8; --hl:#fff4f2; --me:#1a73e8;
+    --d3:#7a0a1d; --d2:#c8102e; --d1:#e2583e; --db:#1f4e79; --ds:#8b8b90; --green:#2e8b57;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
@@ -19,17 +20,17 @@
 
   /* 顶部 */
   .top{position:fixed;left:0;right:0;top:0;z-index:20;padding:calc(env(safe-area-inset-top) + 10px) 12px 0;pointer-events:none}
-  .bar{pointer-events:auto;display:flex;gap:8px;align-items:center;background:var(--card);border-radius:14px;padding:6px 6px 6px 12px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+  .bar{pointer-events:auto;display:flex;gap:6px;align-items:center;background:var(--card);border-radius:14px;padding:6px 6px 6px 12px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
   .bar .logo{width:10px;height:10px;border-radius:50%;background:var(--red);flex:none}
   .bar input{flex:1;min-width:0;border:0;outline:none;font-size:15px;padding:6px 0;background:transparent}
-  .ibtn{flex:none;border:0;background:var(--chip);border-radius:10px;height:34px;min-width:34px;padding:0 10px;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:4px}
+  .ibtn{flex:none;border:0;background:var(--chip);border-radius:10px;height:34px;min-width:34px;padding:0 9px;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:4px;white-space:nowrap}
   .ibtn.on{background:var(--ink);color:#fff}
-  .ibtn svg{width:16px;height:16px}
   .chips{pointer-events:auto;display:flex;gap:6px;overflow-x:auto;padding:8px 0 4px;scrollbar-width:none}
   .chips::-webkit-scrollbar{display:none}
-  .chip{flex:none;border:0;background:var(--card);color:var(--ink);padding:6px 11px;border-radius:999px;font-size:13px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+  .chip{flex:none;border:0;background:var(--card);color:var(--ink);padding:6px 11px;border-radius:999px;font-size:13px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.1);display:flex;align-items:center;gap:5px}
   .chip.on{background:var(--ink);color:#fff}
-  .chip .n{opacity:.55;margin-left:3px;font-size:11px}
+  .chip .n{opacity:.55;font-size:11px}
+  .chip i{width:9px;height:9px;border-radius:50%;display:inline-block}
   .chip.new{color:var(--red)} .chip.new.on{background:var(--red);color:#fff}
 
   /* 底部抽屉 */
@@ -48,15 +49,17 @@
   .item{display:flex;gap:10px;padding:10px 8px;border-radius:12px;align-items:flex-start}
   .item:active{background:var(--card)}
   .item.sel{background:var(--hl);box-shadow:inset 3px 0 0 var(--red)}
-  .num{flex:none;width:26px;height:26px;border-radius:50%;color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:1px}
-  .p1{background:var(--red)} .p2{background:var(--navy)}
+  .badge{flex:none;min-width:38px;height:22px;padding:0 6px;border-radius:6px;color:#fff;font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-top:1px;white-space:nowrap}
+  .b3{background:var(--d3)} .b2{background:var(--d2)} .b1{background:var(--d1)} .bb{background:var(--db)} .bs{background:var(--ds)}
   .body{min-width:0;flex:1}
-  .nm{font-weight:600;font-size:15px}
+  .nm{font-weight:600;font-size:15px;overflow-wrap:anywhere}
   .tag{display:inline-block;font-size:10.5px;font-weight:600;color:#fff;background:var(--red);border-radius:4px;padding:0 4px;margin-left:5px;vertical-align:2px}
+  .tag.g{background:var(--green)}
   .meta{color:var(--muted);font-size:12px;margin-top:2px}
   .ad{color:#444;font-size:12.5px;margin-top:3px;line-height:1.45}
   .dist{flex:none;font-size:12px;color:var(--me);font-weight:600;margin-top:3px}
   .empty{color:var(--muted);text-align:center;padding:30px 0;font-size:13px}
+  .more{display:block;width:100%;margin:6px 0 4px;border:0;border-radius:10px;background:var(--chip);padding:10px;font-size:13.5px;color:var(--ink)}
 
   /* 浮动按钮 */
   .fabs{position:fixed;right:12px;z-index:14;display:flex;flex-direction:column;gap:8px;transition:bottom .25s ease}
@@ -78,29 +81,35 @@
     padding:7px 12px;border-radius:9px;max-width:86vw;text-align:center;opacity:0;transition:opacity .25s;pointer-events:none}
   .toast.show{opacity:1}
 
-  /* 首次设置 */
-  .setup{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:50;background:var(--bg);display:none;overflow-y:auto;padding:calc(env(safe-area-inset-top) + 28px) 18px 30px}
-  .setup.show{display:block}
-  .setup h2{margin:0 0 8px;font-size:20px}
-  .setup p,.setup li{color:#444;line-height:1.7;font-size:14px}
-  .setup ol{padding-left:20px;margin:8px 0 16px}
-  .setup code{background:var(--chip);padding:1px 5px;border-radius:4px}
-  .setup a{color:var(--navy)}
-  .setup input{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;font-size:15px;outline:none;background:var(--card)}
-  .setup input:focus{border-color:var(--red)}
-  .setup .btns{display:flex;gap:10px;margin-top:12px}
-  .setup button{flex:1;border:0;border-radius:12px;padding:12px;font-size:15px}
-  .setup .go{background:var(--red);color:#fff}
-  .setup .skip{background:var(--chip);color:var(--ink)}
-  .setup .err{color:var(--red);font-size:13px;margin-top:10px;min-height:1em}
+  /* 全屏面板：设置、地区 */
+  .panel{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:50;background:var(--bg);display:none;overflow-y:auto;padding:calc(env(safe-area-inset-top) + 24px) 18px 30px}
+  .panel.show{display:block}
+  .panel h2{margin:0 0 8px;font-size:20px;display:flex;justify-content:space-between;align-items:center}
+  .panel h2 button{border:0;background:var(--chip);border-radius:10px;padding:6px 12px;font-size:14px}
+  .panel p,.panel li{color:#444;line-height:1.7;font-size:14px}
+  .panel ol{padding-left:20px;margin:8px 0 16px}
+  .panel code{background:var(--chip);padding:1px 5px;border-radius:4px}
+  .panel a{color:var(--navy)}
+  .panel input{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;font-size:15px;outline:none;background:var(--card)}
+  .panel input:focus{border-color:var(--red)}
+  .panel .btns{display:flex;gap:10px;margin-top:12px}
+  .panel .btns button{flex:1;border:0;border-radius:12px;padding:12px;font-size:15px}
+  .panel .go{background:var(--red);color:#fff}
+  .panel .skip{background:var(--chip);color:var(--ink)}
+  .panel .err{color:var(--red);font-size:13px;margin-top:10px;min-height:1em}
+  .regions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .regions button{border:0;background:var(--card);border-radius:12px;padding:12px;text-align:left;font-size:14.5px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;justify-content:space-between;gap:6px}
+  .regions button span{color:var(--muted);font-size:12px;align-self:center}
+  .regions .sec{grid-column:1/-1;color:var(--muted);font-size:12.5px;margin:10px 2px 0}
 
-  /* 信息窗 */
+  /* 店铺卡片 */
   .card{position:fixed;left:12px;right:12px;bottom:calc(102px + env(safe-area-inset-bottom));z-index:25;background:var(--card);border-radius:16px;
-    box-shadow:0 6px 22px rgba(0,0,0,.18);padding:14px 14px 12px;display:none}
+    box-shadow:0 6px 22px rgba(0,0,0,.18);padding:14px 14px 12px;display:none;max-height:60vh;overflow-y:auto}
   .card.show{display:block}
   .card .x{position:absolute;right:6px;top:6px;width:36px;height:36px;border:0;background:transparent;font-size:22px;color:var(--muted);line-height:1}
   .card .ct{display:flex;align-items:center;gap:8px;font-weight:600;font-size:17px;padding-right:30px}
-  .card .cs{color:var(--muted);font-size:12.5px;margin-top:4px}
+  .card .ct span:last-child{overflow-wrap:anywhere}
+  .card .cs{color:var(--muted);font-size:12.5px;margin-top:6px}
   .card .ca{color:#333;font-size:13.5px;margin-top:4px;line-height:1.5}
   .card .cb{display:flex;gap:8px;margin-top:12px}
   .card .cb a{flex:1;display:flex;align-items:center;justify-content:center;min-height:42px;border-radius:11px;background:var(--chip);color:var(--ink);
@@ -116,7 +125,8 @@
 <div class="top">
   <div class="bar">
     <span class="logo"></span>
-    <input id="q" type="search" placeholder="搜索店名、地址、菜系" enterkeyhint="search">
+    <input id="q" type="search" placeholder="搜索店名、城市、菜系" enterkeyhint="search">
+    <button class="ibtn" id="regionBtn">地区</button>
     <button class="ibtn" id="priceBtn">价位</button>
     <button class="ibtn" id="setBtn" aria-label="设置">设置</button>
   </div>
@@ -125,15 +135,15 @@
 
 <div class="fabs" id="fabs">
   <button class="fab" id="locBtn" aria-label="我的位置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
-  <button class="fab" id="fitBtn" aria-label="显示全部"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button class="fab" id="fitBtn" aria-label="显示全部结果"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
 </div>
 
 <div class="sheet" id="sheet">
   <div class="handle" id="handle">
     <div class="grip"></div>
     <div class="row">
-      <div><div class="ttl" id="count">广州 · 米其林必比登</div><div class="sub" id="updated"></div></div>
-      <div class="seg" id="sortSeg"><button data-sort="" class="on">默认</button><button data-sort="near">离我最近</button></div>
+      <div><div class="ttl" id="count">米其林餐厅</div><div class="sub" id="updated"></div></div>
+      <div class="seg" id="sortSeg"><button data-sort="" class="on">按星级</button><button data-sort="near">离我最近</button></div>
     </div>
   </div>
   <div class="list" id="list"></div>
@@ -141,7 +151,7 @@
 
 <div class="card" id="card">
   <button class="x" id="cardX" aria-label="关闭">×</button>
-  <div class="ct"><span class="num" id="cNum"></span><span id="cName"></span></div>
+  <div class="ct"><span class="badge" id="cBadge"></span><span id="cName"></span></div>
   <div class="cs" id="cSub"></div>
   <div class="ca" id="cAddr"></div>
   <div class="cb"><a class="pri" id="cNav">导航</a><a id="cTel">电话</a><a id="cMic">米其林点评</a></div>
@@ -156,7 +166,12 @@
   <div class="btns"><button id="mwAk">重新填写 AK</button><button id="mwClose">关闭</button></div>
 </div>
 
-<div class="setup" id="setup">
+<div class="panel" id="regionPanel">
+  <h2>选择地区 <button id="regionClose">关闭</button></h2>
+  <div class="regions" id="regions"></div>
+</div>
+
+<div class="panel" id="setup">
   <h2>连接百度地图</h2>
   <p>地图显示需要一个免费的百度地图“浏览器端 AK”。只需设置一次，之后打开 App 会自动加载。</p>
   <ol>
@@ -168,7 +183,7 @@
   <div class="btns"><button class="skip" id="akSkip">先看列表</button><button class="go" id="akBtn">保存并加载</button></div>
   <div class="err" id="akErr"></div>
   <div class="btns" style="margin-top:4px"><button class="skip" id="diagBtn">诊断信息</button><button class="skip" id="engBtn">地图模式</button></div>
-  <p style="font-size:12.5px;color:var(--muted);margin-top:18px">名单来自米其林指南官网，每月自动核对一次，有变化时 App 打开即会更新。地址定位使用百度地图解析。</p>
+  <p style="font-size:12.5px;color:var(--muted);margin-top:18px">名单来自米其林指南官网，收录全球星级、必比登和入选餐厅。全球名单每月刷新一次，详细地址和电话每天陆续补充，App 打开时自动更新。中国内地、港澳的店用百度地图导航，其他地区交给手机上的地图 App。</p>
 </div>
 
 <script>
@@ -179,7 +194,7 @@ window.addEventListener("error", e=>{ if(e.target && e.target!==window && e.targ
 window.addEventListener("unhandledrejection", e=>diag("异步错误: "+((e.reason&&e.reason.message)||e.reason)));
 ["error","warn"].forEach(k=>{ const o=console[k]; console[k]=function(){ try{ diag("控制台"+(k==="error"?"错误":"警告")+": "+Array.from(arguments).map(x=>typeof x==="object"?JSON.stringify(x):String(x)).join(" ")); }catch(e){} return o.apply(console,arguments); }; });
 // 百度地图在 AK 校验失败、配额超限时通常用弹窗提示，这里截下来显示在诊断卡片里
-window.alert = function(m){ diag("百度提示: "+m); S && (S.baiduMsg = String(m)); if(window.showMapProblem) showMapProblem(); };
+window.alert = function(m){ diag("百度提示: "+m); try{ S.baiduMsg = String(m); }catch(e){} if(window.showMapProblem) showMapProblem(); };
 function hasWebGL(){ try{ const c=document.createElement("canvas"); return !!(c.getContext("webgl")||c.getContext("experimental-webgl")); }catch(e){ return false; } }
 
 /* ================= 基础 ================= */
@@ -187,12 +202,14 @@ let ENGINE = (function(){ try{ return localStorage.getItem("bib_engine"); }catch
 function switchEngine(){ try{ localStorage.setItem("bib_engine", ENGINE==="gl"?"classic":"gl"); }catch(e){} location.reload(); }
 const P = new URLSearchParams(location.search);
 const REPO = P.get("repo") || "";
-const REMOTE = REPO ? `https://cdn.jsdelivr.net/gh/${REPO}@main/data/restaurants.json` : "";
+const CDN = REPO ? `https://cdn.jsdelivr.net/gh/${REPO}@main/data/` : "";
+const SITE = "https://guide.michelin.com/sg/zh_CN";
 const $ = s => document.querySelector(s);
 const enc = encodeURIComponent;
 function store(k,v){ try{ if(v===undefined) return localStorage.getItem(k); if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v);}catch(e){ return null; } }
 function toast(t,ms){ const el=$("#toast"); el.textContent=t; el.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.remove("show"), ms||2600); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function debounce(f,ms){ let t; return function(){ clearTimeout(t); const a=arguments; t=setTimeout(()=>f.apply(null,a),ms); }; }
 
 /* 坐标转换 WGS84 → GCJ02 → BD09 */
 const PI=Math.PI, A=6378245.0, EE=0.00669342162296594323;
@@ -200,105 +217,181 @@ function tLat(x,y){let r=-100+2*x+3*y+0.2*y*y+0.1*x*y+0.2*Math.sqrt(Math.abs(x))
 function tLng(x,y){let r=300+x+2*y+0.1*x*x+0.1*x*y+0.1*Math.sqrt(Math.abs(x));r+=(20*Math.sin(6*x*PI)+20*Math.sin(2*x*PI))*2/3;r+=(20*Math.sin(x*PI)+40*Math.sin(x/3*PI))*2/3;r+=(150*Math.sin(x/12*PI)+300*Math.sin(x/30*PI))*2/3;return r;}
 function wgs2gcj(lat,lng){let dLat=tLat(lng-105,lat-35),dLng=tLng(lng-105,lat-35);const rad=lat/180*PI;let m=Math.sin(rad);m=1-EE*m*m;const s=Math.sqrt(m);dLat=dLat*180/((A*(1-EE))/(m*s)*PI);dLng=dLng*180/(A/s*Math.cos(rad)*PI);return [lat+dLat,lng+dLng];}
 function gcj2bd(lat,lng){const z=Math.sqrt(lng*lng+lat*lat)+0.00002*Math.sin(lat*PI*3000/180);const t=Math.atan2(lat,lng)+0.000003*Math.cos(lng*PI*3000/180);return [z*Math.sin(t)+0.006, z*Math.cos(t)+0.0065];}
+function inChinaBox(lat,lng){ return lng>72.004 && lng<137.8347 && lat>0.8293 && lat<55.8271; }
 function haversine(a,b){const R=6371000,r=x=>x*PI/180;const dLat=r(b[0]-a[0]),dLng=r(b[1]-a[1]);const h=Math.sin(dLat/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
-function inGZ(lat,lng){ return lat>22.4 && lat<23.95 && lng>112.9 && lng<114.1; }
 function fmtDist(m){ return m<1000 ? Math.round(m)+" m" : (m/1000).toFixed(m<10000?1:0)+" km"; }
+function fmtN(n){ return n>=10000 ? (n/10000).toFixed(n>=100000?0:1)+"万" : n>=1000 ? (n/1000).toFixed(1).replace(/\.0$/,"")+"k" : String(n); }
+
+/* ================= 名称表 ================= */
+const DIST = { "3":{t:"三星",c:"#7a0a1d",k:"b3",g:"3"}, "2":{t:"二星",c:"#c8102e",k:"b2",g:"2"}, "1":{t:"一星",c:"#e2583e",k:"b1",g:"1"},
+               "b":{t:"必比登",c:"#1f4e79",k:"bb",g:"B"}, "s":{t:"入选",c:"#8b8b90",k:"bs",g:""} };
+const RANK = {"3":0,"2":1,"1":2,"b":3,"s":4};
+const COUNTRY = {cn:"中国内地",hk:"中国香港",mo:"中国澳门",tw:"中国台湾",jp:"日本",kr:"韩国",sg:"新加坡",th:"泰国",my:"马来西亚",vn:"越南",ph:"菲律宾",
+  ae:"阿联酋",qa:"卡塔尔",sa:"沙特阿拉伯",tr:"土耳其",us:"美国",ca:"加拿大",mx:"墨西哥",br:"巴西",ar:"阿根廷",co:"哥伦比亚",cl:"智利",pe:"秘鲁",
+  fr:"法国",gb:"英国",ie:"爱尔兰",it:"意大利",es:"西班牙",pt:"葡萄牙",de:"德国",at:"奥地利",ch:"瑞士",be:"比利时",nl:"荷兰",lu:"卢森堡",mc:"摩纳哥",
+  dk:"丹麦",se:"瑞典",no:"挪威",fi:"芬兰",is:"冰岛",ee:"爱沙尼亚",lv:"拉脱维亚",lt:"立陶宛",pl:"波兰",cz:"捷克",sk:"斯洛伐克",hu:"匈牙利",
+  si:"斯洛文尼亚",hr:"克罗地亚",rs:"塞尔维亚",gr:"希腊",mt:"马耳他",cy:"塞浦路斯",ro:"罗马尼亚",bg:"保加利亚",ad:"安道尔",sm:"圣马力诺",li:"列支敦士登",
+  au:"澳大利亚",nz:"新西兰",in:"印度",id:"印度尼西亚",il:"以色列",ma:"摩洛哥",za:"南非",eg:"埃及",me:"黑山",ba:"波黑",al:"阿尔巴尼亚",
+  ge:"格鲁吉亚",am:"亚美尼亚",az:"阿塞拜疆",kz:"哈萨克斯坦",uz:"乌兹别克斯坦",bh:"巴林",kw:"科威特",om:"阿曼",jo:"约旦",lb:"黎巴嫩",va:"梵蒂冈"};
+const CC_FIRST = ["cn","hk","mo","tw","jp","kr","sg","th","my","vn","ph"];
+// 中文城市名 ↔ 米其林英文城市名（用于搜索和百度地址解析）
+const CITY = {"广州":"Guangzhou","北京":"Beijing","上海":"Shanghai","成都":"Chengdu","杭州":"Hangzhou","深圳":"Shenzhen","香港":"Hong Kong","澳门":"Macau",
+  "台北":"Taipei","台中":"Taichung","台南":"Tainan","高雄":"Kaohsiung","新北":"New Taipei","东京":"Tokyo","大阪":"Osaka","京都":"Kyoto","福冈":"Fukuoka",
+  "札幌":"Sapporo","名古屋":"Nagoya","神户":"Kobe","奈良":"Nara","横滨":"Yokohama","金泽":"Kanazawa","广岛":"Hiroshima","冲绳":"Okinawa","那霸":"Naha",
+  "首尔":"Seoul","釜山":"Busan","新加坡":"Singapore","曼谷":"Bangkok","清迈":"Chiang Mai","普吉":"Phuket","芭提雅":"Pattaya","吉隆坡":"Kuala Lumpur","槟城":"Penang",
+  "河内":"Hanoi","胡志明":"Ho Chi Minh","岘港":"Da Nang","马尼拉":"Manila","迪拜":"Dubai","阿布扎比":"Abu Dhabi","多哈":"Doha","利雅得":"Riyadh",
+  "伊斯坦布尔":"Istanbul","巴黎":"Paris","里昂":"Lyon","马赛":"Marseille","尼斯":"Nice","波尔多":"Bordeaux","伦敦":"London","爱丁堡":"Edinburgh",
+  "曼彻斯特":"Manchester","都柏林":"Dublin","罗马":"Rome","米兰":"Milan","佛罗伦萨":"Florence","威尼斯":"Venice","那不勒斯":"Naples","都灵":"Turin",
+  "马德里":"Madrid","巴塞罗那":"Barcelona","圣塞巴斯蒂安":"San Sebastián","塞维利亚":"Seville","瓦伦西亚":"Valencia","里斯本":"Lisbon","波尔图":"Porto",
+  "柏林":"Berlin","慕尼黑":"Munich","汉堡":"Hamburg","法兰克福":"Frankfurt","维也纳":"Vienna","萨尔茨堡":"Salzburg","苏黎世":"Zurich","日内瓦":"Geneva",
+  "阿姆斯特丹":"Amsterdam","布鲁塞尔":"Brussels","哥本哈根":"Copenhagen","斯德哥尔摩":"Stockholm","奥斯陆":"Oslo","赫尔辛基":"Helsinki",
+  "布拉格":"Prague","布达佩斯":"Budapest","华沙":"Warsaw","雅典":"Athens","摩纳哥":"Monaco","纽约":"New York","芝加哥":"Chicago","旧金山":"San Francisco",
+  "洛杉矶":"Los Angeles","华盛顿":"Washington","迈阿密":"Miami","奥兰多":"Orlando","亚特兰大":"Atlanta","多伦多":"Toronto","温哥华":"Vancouver",
+  "蒙特利尔":"Montreal","墨西哥城":"Mexico City","圣保罗":"São Paulo","里约":"Rio de Janeiro","布宜诺斯艾利斯":"Buenos Aires"};
+const CITY_REV = Object.fromEntries(Object.entries(CITY).map(([zh,en])=>[en.toLowerCase(),zh]));
 
 /* ================= 状态 ================= */
-const S = { data:null, rows:[], map:null, markers:{}, sel:null, me:null, meMarker:null, sort:"",
-  filt:{q:"",cuisine:"",price:"",fresh:false}, geo:{} };
-try{ S.geo = JSON.parse(store("bib_geo_v2")||"{}")||{}; }catch(e){ S.geo={}; }
-function saveGeo(){ store("bib_geo_v2", JSON.stringify(S.geo)); }
+const S = { data:null, rows:[], byId:new Map(), map:null, ov:new Map(), sel:null, me:null, meMarker:null, sort:"",
+  filt:{q:"",dist:"",lvl:0}, geo:{}, shown:80 };
+try{ S.geo = JSON.parse(store("bib_geo_v3")||"{}")||{}; }catch(e){ S.geo={}; }
+const saveGeo = debounce(()=>store("bib_geo_v3", JSON.stringify(S.geo)), 1500);
+store("bib_data", null); store("bib_geo_v2", null);   // 清掉旧版广州数据，腾出存储空间
 
 /* ================= 数据 ================= */
-function validData(d){ return d && Array.isArray(d.restaurants) && d.restaurants.length>=20; }
-function newer(a,b){ if(!validData(a)) return validData(b)?b:null; if(!validData(b)) return a; return (a.updated||"")>=(b.updated||"") ? a : b; }
+function validData(d){ return d && Array.isArray(d.fields) && Array.isArray(d.rows) && d.rows.length>=20; }
 function daysSince(s){ if(!s) return 1e9; return (Date.now()-new Date(s+"T00:00:00+08:00").getTime())/864e5; }
+function priceLevel(p){ if(!p) return 0; const c=p[0]; let n=0; for(const ch of p){ if(ch===c) n++; else break; } return Math.min(n,4); }
+function toBd(o){
+  if(typeof o.lat!=="number" || typeof o.lng!=="number") return null;
+  let g=[o.lat,o.lng];
+  // 中国内地的米其林坐标已是国测局坐标；港澳台及海外为国际坐标，港澳台需先加偏移
+  if(o.cc!=="cn" && inChinaBox(o.lat,o.lng) && (o.cc==="hk"||o.cc==="mo"||o.cc==="tw")) g=wgs2gcj(o.lat,o.lng);
+  return gcj2bd(g[0],g[1]);
+}
 function prepare(d){
-  S.data = d;
-  S.rows = d.restaurants.map((r,i)=>{
-    const o = Object.assign({}, r, {id:i+1});
-    o.district = (String(o.addr||"").match(/^(.{2,3}?区)/)||[,""])[1];
-    if(o.lat!=null && o.lng!=null && inGZ(o.lat,o.lng)) o.bd = gcj2bd(o.lat,o.lng); else o.bd = null;
-    o.fresh = daysSince(o.added) <= 120;
+  S.data=d; S.byId=new Map();
+  const F=d.fields;
+  S.rows = d.rows.map(arr=>{
+    const o={}; F.forEach((k,i)=>o[k]=arr[i]);
+    o.bd0=toBd(o);
+    o.cname=COUNTRY[o.cc]||(o.loc||"").split(",").pop().trim()||o.cc.toUpperCase();
+    o.cityZh=CITY_REV[(o.city||"").toLowerCase()]||"";
+    o.lvl=priceLevel(o.price);
+    o.fresh=!!o.added && daysSince(o.added)<=120;
+    o.url=SITE+o.path;
+    o.hay=(o.name+" "+o.city+" "+o.cityZh+" "+o.loc+" "+o.cuisine+" "+(o.addr||"")+" "+o.cname).toLowerCase();
+    S.byId.set(o.id,o);
     return o;
   });
 }
-async function fetchJSON(url, ms){
-  const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), ms||8000);
-  try{ const r = await fetch(url,{signal:ctl.signal,cache:"no-store"}); if(!r.ok) throw new Error(r.status); return await r.json(); }
+async function fetchText(url, ms){
+  const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(), ms||8000);
+  try{ const r=await fetch(url,{signal:ctl.signal,cache:"no-store"}); if(!r.ok) throw new Error(r.status); return await r.text(); }
   finally{ clearTimeout(t); }
 }
+function parse(t){ try{ const d=JSON.parse(t); return validData(d)?d:null; }catch(e){ return null; } }
+async function cacheGet(){ try{ const c=await caches.open("bib"); const r=await c.match("/data.json"); return r? parse(await r.text()) : null; }catch(e){ return null; } }
+async function cachePut(text){ try{ const c=await caches.open("bib"); await c.put("/data.json", new Response(text,{headers:{"content-type":"application/json"}})); }catch(e){} }
+function use(d){ prepare(d); buildChips(); buildRegions(); render(); refreshList(); if(S.afterData){ const f=S.afterData; S.afterData=null; f(); } }
 async function loadData(){
-  let cached=null; try{ cached = JSON.parse(store("bib_data")||"null"); }catch(e){}
-  let bundled=null; try{ bundled = await fetchJSON("restaurants.json", 4000); }catch(e){}
-  const best = newer(cached, bundled);
-  if(best){ prepare(best); buildChips(); rebuildMarkers(); refresh(true); }
-  if(S.data && S.afterData){ const f=S.afterData; S.afterData=null; f(); }
-  if(!REMOTE) return;
+  let bundled=null; try{ bundled=parse(await fetchText("restaurants.json", 8000)); }catch(e){}
+  const cached=await cacheGet();
+  let best = [bundled,cached].filter(Boolean).sort((a,b)=>(b.updated||"").localeCompare(a.updated||""))[0]||null;
+  if(best) use(best);
+  if(!CDN) return;
   try{
-    const remote = await fetchJSON(REMOTE+"?t="+Math.floor(Date.now()/36e5), 9000);
-    if(!validData(remote)) return;
-    if(!best || (remote.updated||"") > (best.updated||"")){
-      const oldSlugs = new Set(best ? best.restaurants.map(r=>r.slug) : []);
-      store("bib_data", JSON.stringify(remote));
-      prepare(remote); buildChips(); rebuildMarkers(); refresh(true);
-      const added = remote.restaurants.filter(r=>!oldSlugs.has(r.slug)).length;
-      toast(`名单已更新至 ${remote.updated}，共 ${remote.restaurants.length} 家` + (best && added ? `，新增 ${added} 家` : ""), 4000);
-    }
+    const meta=JSON.parse(await fetchText(CDN+"meta.json?t="+Math.floor(Date.now()/36e5), 6000));
+    if(best && (meta.updated||"")<=(best.updated||"")) return;
+    const text=await fetchText(CDN+"restaurants.json?t="+enc(meta.updated||""), 30000);
+    const remote=parse(text); if(!remote) return;
+    if(best && (remote.updated||"")<=(best.updated||"")) return;
+    const old=best? new Set(best.rows.map(r=>r[0])) : null;
+    await cachePut(text); use(remote);
+    const added = old ? remote.rows.filter(r=>!old.has(r[0])).length : 0;
+    toast(`名单已更新至 ${remote.updated}，共 ${fmtN(remote.rows.length)} 家`+(added?`，新增 ${added} 家`:""), 4000);
   }catch(e){ /* 离线时继续用本地名单 */ }
 }
 
-/* ================= 筛选与列表 ================= */
-function buildChips(){
-  const cnt={}; S.rows.forEach(r=>cnt[r.cuisine]=(cnt[r.cuisine]||0)+1);
-  const order = Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
-  const fresh = S.rows.filter(r=>r.fresh).length;
-  if(S.filt.cuisine && !cnt[S.filt.cuisine]) S.filt.cuisine="";
-  $("#chips").innerHTML =
-    `<button class="chip${S.filt.cuisine||S.filt.fresh?"":" on"}" data-c="">全部</button>` +
-    (fresh ? `<button class="chip new${S.filt.fresh?" on":""}" data-fresh="1">新上榜<span class="n">${fresh}</span></button>` : "") +
-    order.map(c=>`<button class="chip${S.filt.cuisine===c?" on":""}" data-c="${esc(c)}">${esc(c)}<span class="n">${cnt[c]}</span></button>`).join("");
-  document.querySelectorAll("#chips .chip").forEach(el=>el.onclick=()=>{
-    if(el.dataset.fresh){ S.filt.fresh=!S.filt.fresh; S.filt.cuisine=""; }
-    else { S.filt.cuisine=el.dataset.c; S.filt.fresh=false; }
-    buildChips(); refresh(true);
-  });
+/* ================= 筛选 ================= */
+function qTerms(q){
+  q=q.trim().toLowerCase(); if(!q) return null;
+  const alt=[]; for(const [zh,en] of Object.entries(CITY)) if(q.includes(zh)) alt.push(q.replace(zh,en.toLowerCase()).trim());
+  for(const [cc,zh] of Object.entries(COUNTRY)) if(q===zh || q===zh.replace(/^中国/,"")) alt.push("@"+cc);
+  return [q].concat(alt);
 }
 function visible(r){
   const f=S.filt;
-  if(f.fresh && !r.fresh) return false;
-  if(f.cuisine && r.cuisine!==f.cuisine) return false;
-  if(f.price && r.price!==f.price) return false;
-  if(f.q && !(r.name+r.addr+r.cuisine+r.district).toLowerCase().includes(f.q.toLowerCase())) return false;
+  if(f.dist){
+    if(f.dist==="star"){ if(!"123".includes(r.dist)) return false; }
+    else if(f.dist==="green"){ if(!r.green) return false; }
+    else if(f.dist==="new"){ if(!r.fresh) return false; }
+    else if(r.dist!==f.dist) return false;
+  }
+  if(f.lvl && r.lvl!==f.lvl) return false;
+  if(f.terms && !f.terms.some(t=> t[0]==="@" ? r.cc===t.slice(1) : r.hay.includes(t))) return false;
   return true;
 }
-function posOf(r){ // 百度坐标 [lat,lng]
-  const g=S.geo[r.slug];
-  if(g && g.a===r.addr && g.pt) return g.pt;
-  return r.bd;
+function buildChips(){
+  const cnt={3:0,2:0,1:0,b:0,s:0,green:0,new:0};
+  S.rows.forEach(r=>{ cnt[r.dist]++; if(r.green) cnt.green++; if(r.fresh) cnt.new++; });
+  const star=cnt[3]+cnt[2]+cnt[1];
+  const items=[["","全部",S.rows.length,null],["star","星级",star,"#c8102e"],["3","三星",cnt[3],DIST[3].c],["2","二星",cnt[2],DIST[2].c],["1","一星",cnt[1],DIST[1].c],
+    ["b","必比登",cnt.b,DIST.b.c],["s","入选",cnt.s,DIST.s.c],["green","绿星",cnt.green,"#2e8b57"]];
+  if(cnt.new) items.push(["new","新上榜",cnt.new,null]);
+  $("#chips").innerHTML=items.map(([k,t,n,c])=>`<button class="chip${S.filt.dist===k?" on":""}${k==="new"?" new":""}" data-d="${k}">${c?`<i style="background:${c}"></i>`:""}${t}<span class="n">${fmtN(n)}</span></button>`).join("");
+  document.querySelectorAll("#chips .chip").forEach(el=>el.onclick=()=>{ S.filt.dist=el.dataset.d; buildChips(); onFilter(); });
 }
+function onFilter(){ S.shown=80; render(); refreshList(); }
+
+/* ================= 位置 ================= */
+function posOf(r){ const g=S.geo[r.id]; if(g && g.a===r.addr && g.pt) return g.pt; return r.bd0; }
 function distOf(r){ const p=posOf(r); return (S.me && p) ? haversine(S.me,p) : null; }
-function refresh(updateMarkers){
+function bounds(){
+  if(!S.map) return null;
+  try{ const b=S.map.getBounds(), sw=b.getSouthWest(), ne=b.getNorthEast(); return {s:sw.lat,w:sw.lng,n:ne.lat,e:ne.lng}; }catch(e){ return null; }
+}
+function inB(p,b,pad){
+  if(!p||!b) return false;
+  const dy=(b.n-b.s)*pad, dx=((b.e>=b.w? b.e-b.w : b.e+360-b.w))*pad;
+  if(p[0]<b.s-dy || p[0]>b.n+dy) return false;
+  if(b.e-b.w>300 || b.e<b.w && (b.e+360-b.w)>300) return true;
+  if(b.e>=b.w) return p[1]>=b.w-dx && p[1]<=b.e+dx;
+  return p[1]>=b.w-dx || p[1]<=b.e+dx;
+}
+
+/* ================= 列表 ================= */
+function listRows(){
+  let rows=S.rows.filter(visible), scope;
+  const b=bounds();
+  if(S.filt.terms){ scope="search"; }
+  else if(b){ rows=rows.filter(r=>inB(posOf(r),b,0)); scope="view"; }
+  else scope="all";
+  if(S.sort==="near" && S.me) rows.sort((a,b)=>(distOf(a)??1e15)-(distOf(b)??1e15));
+  else rows.sort((a,b)=>RANK[a.dist]-RANK[b.dist] || (S.me?(distOf(a)??1e15)-(distOf(b)??1e15):0));
+  return {rows,scope};
+}
+function refreshList(){
   if(!S.data) return;
-  let rows = S.rows.filter(visible);
-  if(S.sort==="near" && S.me) rows = rows.slice().sort((a,b)=>(distOf(a)??1e12)-(distOf(b)??1e12));
-  $("#count").textContent = `必比登推介 · ${rows.length === S.rows.length ? "共 "+rows.length : rows.length+" / "+S.rows.length} 家`;
-  $("#updated").textContent = `米其林指南广州 · 名单核对于 ${S.data.updated||"—"}`;
-  $("#list").innerHTML = rows.length ? rows.map(r=>{
-    const d = distOf(r);
-    return `<div class="item${S.sel===r.slug?" sel":""}" data-s="${esc(r.slug)}">
-      <div class="num ${r.price==="¥"?"p1":"p2"}">${r.id}</div>
+  const {rows,scope}=listRows();
+  $("#count").textContent = (scope==="search"?"搜索结果":scope==="view"?"当前地图范围":"全部") + ` · ${rows.length.toLocaleString()} 家`;
+  $("#updated").textContent = `全球共 ${S.rows.length.toLocaleString()} 家 · 名单核对于 ${S.data.updated||"—"}`;
+  const show=rows.slice(0,S.shown);
+  $("#list").innerHTML = rows.length ? show.map(r=>{
+    const d=distOf(r), D=DIST[r.dist]||DIST.s;
+    const where=[r.cuisine, r.price, r.cityZh||r.city, r.cc==="cn"?"":r.cname].filter(Boolean).join(" · ");
+    return `<div class="item${S.sel===r.id?" sel":""}" data-id="${r.id}">
+      <span class="badge ${D.k}">${D.t}</span>
       <div class="body">
-        <div class="nm">${esc(r.name)}${r.fresh?'<span class="tag">新</span>':""}</div>
-        <div class="meta">${esc(r.cuisine)} · ${esc(r.price)}${r.district?" · "+esc(r.district):""}</div>
-        <div class="ad">${esc(r.addr)}</div>
+        <div class="nm">${esc(r.name)}${r.green?'<span class="tag g">绿星</span>':""}${r.fresh?'<span class="tag">新</span>':""}</div>
+        <div class="meta">${esc(where)}</div>
+        ${r.addr?`<div class="ad">${esc(r.addr)}</div>`:""}
       </div>
       ${d!=null?`<div class="dist">${fmtDist(d)}</div>`:""}
     </div>`;
-  }).join("") : `<div class="empty">没有符合条件的餐厅</div>`;
-  document.querySelectorAll(".item").forEach(el=>el.onclick=()=>focusOn(el.dataset.s, true));
-  if(updateMarkers && S.map) S.rows.forEach(r=>{ const m=S.markers[r.slug]; if(m) visible(r)?m.show():m.hide(); });
+  }).join("") + (rows.length>S.shown?`<button class="more" id="moreBtn">再显示 ${Math.min(80,rows.length-S.shown)} 家（共 ${rows.length.toLocaleString()} 家）</button>`:"")
+  : `<div class="empty">${scope==="view"?"当前地图范围内没有符合条件的餐厅，缩小地图或换个地区试试":"没有符合条件的餐厅"}</div>`;
+  document.querySelectorAll(".item").forEach(el=>el.onclick=()=>focusOn(+el.dataset.id, true));
+  const mb=$("#moreBtn"); if(mb) mb.onclick=()=>{ S.shown+=80; refreshList(); };
 }
 
 /* ================= 抽屉 ================= */
@@ -320,101 +413,173 @@ $("#handle").onclick = e=>{
     if(Math.abs(dy)<30) return; const full=sheet.classList.contains("full"), min=sheet.classList.contains("min");
     if(dy<0) setSheet(min?"":"full"); else setSheet(full?"":"min"); e.preventDefault(); });
 })();
+function bottomPad(){ return sheet.classList.contains("min")?110:sheet.classList.contains("full")?40:window.innerHeight*0.46; }
 
-/* ================= 百度地图 ================= */
+/* ================= 地图标记与聚合 ================= */
+const ICONS={};
+function iconFor(key, make){ return ICONS[key] || (ICONS[key]=make()); }
 function pinIcon(r, big){
-  const c = r.price==="¥" ? "#c8102e" : "#1f4e79";
-  const w = big?38:28, h = big?48:36;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 28 36"><path d="M14 35s11-11.6 11-20.5C25 7.6 20.1 3 14 3S3 7.6 3 14.5C3 23.4 14 35 14 35z" fill="${c}" stroke="#fff" stroke-width="2"/><text x="14" y="18.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="${r.id>9?10:11}" font-weight="700" fill="#fff">${r.id}</text></svg>`;
-  return new BMX.Icon("data:image/svg+xml;charset=utf-8,"+enc(svg), new BMX.Size(w,h), {anchor:new BMX.Size(w/2,h)});
+  return iconFor("p"+r.dist+(big?"B":""), ()=>{
+    const D=DIST[r.dist]||DIST.s, small=r.dist==="s";
+    const w=big?38:small?20:28, h=big?48:small?26:36;
+    const txt=D.g ? `<text x="14" y="18.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" font-weight="700" fill="#fff">${D.g==="B"?"B":D.g+"★"}</text>` : `<circle cx="14" cy="14.5" r="3.2" fill="#fff"/>`;
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 28 36"><path d="M14 35s11-11.6 11-20.5C25 7.6 20.1 3 14 3S3 7.6 3 14.5C3 23.4 14 35 14 35z" fill="${D.c}" stroke="#fff" stroke-width="2"/>${txt}</svg>`;
+    return new BMX.Icon("data:image/svg+xml;charset=utf-8,"+enc(svg), new BMX.Size(w,h), {anchor:new BMX.Size(w/2,h)});
+  });
+}
+function clusterIcon(n, best){
+  const s = n<10?30:n<100?36:n<1000?42:48, label=fmtN(n);
+  return iconFor("c"+label+best, ()=>{
+    const c=(DIST[best]||DIST.s).c;
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}"><circle cx="${s/2}" cy="${s/2}" r="${s/2-1.5}" fill="${c}" fill-opacity=".92" stroke="#fff" stroke-width="2.5"/><text x="${s/2}" y="${s/2+4.2}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${label.length>3?11:12.5}" font-weight="700" fill="#fff">${label}</text></svg>`;
+    return new BMX.Icon("data:image/svg+xml;charset=utf-8,"+enc(svg), new BMX.Size(s,s), {anchor:new BMX.Size(s/2,s/2)});
+  });
 }
 function bpt(p){ return new BMX.Point(p[1], p[0]); }
-function placeMarker(r){
-  const p = posOf(r); if(!p || !S.map) return;
-  let m = S.markers[r.slug];
-  if(!m){
-    m = new BMX.Marker(bpt(p), {icon:pinIcon(r,S.sel===r.slug), title:r.name});
-    m.addEventListener("click", e=>{ S.markerTap=Date.now(); if(e && e.domEvent && e.domEvent.stopPropagation) e.domEvent.stopPropagation(); focusOn(r.slug,false); });
-    S.map.addOverlay(m); S.markers[r.slug]=m;
-    if(!visible(r)) m.hide();
-  } else m.setPosition(bpt(p));
+function addOv(key, make){
+  let m=S.ov.get(key);
+  if(!m){ m=make(); S.map.addOverlay(m); S.ov.set(key,m); }
+  m.__keep=true; return m;
 }
-function rebuildMarkers(){
-  if(!S.map) return;
-  Object.values(S.markers).forEach(m=>S.map.removeOverlay(m)); S.markers={};
-  S.rows.forEach(placeMarker); geocodeAll();
+function render(){
+  if(!S.map || !S.data) return;
+  const b=bounds(); if(!b) return;
+  const el=$("#map"), W=el.offsetWidth||400, H=el.offsetHeight||800, z=S.map.getZoom();
+  const inView=S.rows.filter(r=>r.id!==S.sel && visible(r) && inB(posOf(r),b,0.15));
+  S.ov.forEach(m=>m.__keep=false);
+  const drawPin=r=>{ const p=posOf(r); if(!p) return;
+    const m=addOv("r"+r.id+(S.sel===r.id?"B":""), ()=>{ const mk=new BMX.Marker(bpt(p),{icon:pinIcon(r,S.sel===r.id),title:r.name});
+      mk.addEventListener("click", e=>{ S.markerTap=Date.now(); focusOn(r.id,false); }); return mk; });
+    const q=m.getPosition(); if(Math.abs(q.lat-p[0])>1e-7 || Math.abs(q.lng-p[1])>1e-7) m.setPosition(bpt(p)); };
+  if(z>=16 || inView.length<=120){
+    inView.sort((a,b)=>RANK[a.dist]-RANK[b.dist]).slice(0,400).forEach(drawPin);
+  } else {
+    const spanLng=(b.e>=b.w? b.e-b.w : b.e+360-b.w), cx=Math.max(spanLng,1e-6)*64/W, cy=Math.max(b.n-b.s,1e-6)*64/H;
+    const cells=new Map();
+    for(const r of inView){ const p=posOf(r); const k=Math.floor(p[1]/cx)+":"+Math.floor(p[0]/cy);
+      let c=cells.get(k); if(!c){ c={n:0,la:0,ln:0,best:"s",one:r}; cells.set(k,c); }
+      c.n++; c.la+=p[0]; c.ln+=p[1]; if(RANK[r.dist]<RANK[c.best]) c.best=r.dist; }
+    cells.forEach((c,k)=>{
+      if(c.n===1){ drawPin(c.one); return; }
+      const pt=[c.la/c.n, c.ln/c.n];
+      addOv("c"+z.toFixed(1)+":"+k+":"+c.n+c.best, ()=>{ const mk=new BMX.Marker(bpt(pt),{icon:clusterIcon(c.n,c.best)});
+        mk.addEventListener("click", ()=>{ S.markerTap=Date.now(); S.map.centerAndZoom(bpt(pt), Math.min(Math.floor(S.map.getZoom())+2, 17)); }); return mk; });
+    });
+  }
+  if(S.sel){ const r=S.byId.get(S.sel); if(r) drawPin(r); }
+  S.ov.forEach((m,k)=>{ if(!m.__keep){ S.map.removeOverlay(m); S.ov.delete(k); } });
+  if(z>=14) geocodeQueue(inView.filter(r=>r.cc==="cn" && r.addr).slice(0,40));
 }
-function navUrl(r,p){ return `https://api.map.baidu.com/marker?location=${p[0]},${p[1]}&title=${enc(r.name)}&content=${enc(r.addr)}&output=html&coord_type=bd09ll&src=webapp.gzbib`; }
-function searchUrl(r){ const q=r.name.replace(/[()（）]/g," ").replace(/\s+/g," ").trim(); return `https://map.baidu.com/search/${enc(q)}/?querytype=s&wd=${enc(q)}&c=257`; }
-function focusOn(slug, fromList){
-  const r = S.rows.find(x=>x.slug===slug); if(!r) return;
-  const prev=S.sel; S.sel=slug;
-  if(!S.map){ location.href = searchUrl(r); return; }
-  if(prev && S.markers[prev]){ const pr=S.rows.find(x=>x.slug===prev); if(pr) S.markers[prev].setIcon(pinIcon(pr,false)); }
-  const m=S.markers[slug]; const p=posOf(r);
-  if(!m || !p){ toast("这家暂无坐标，已打开百度地图搜索"); location.href=searchUrl(r); return; }
-  m.setIcon(pinIcon(r,true));
-  if(fromList){ setSheet("min"); S.map.centerAndZoom(m.getPosition(), Math.max(S.map.getZoom(),16)); }
+const onMove=debounce(()=>{ render(); S.shown=80; refreshList(); saveView(); }, 180);
+const saveView=debounce(()=>{ try{ const c=S.map.getCenter(); store("bib_view", JSON.stringify({lng:c.lng,lat:c.lat,z:S.map.getZoom()})); }catch(e){} }, 800);
+
+/* 中国内地的店按地址再向百度解析一次，修正个别米其林坐标偏差 */
+let gq=[], gBusy=false;
+function geocodeQueue(list){
+  if(!S.map || !BMX.Geocoder) return;
+  for(const r of list){ const g=S.geo[r.id]; if(g && g.a===r.addr) continue; if(!gq.includes(r)) gq.push(r); }
+  if(gBusy) return; gBusy=true;
+  const gc=new BMX.Geocoder();
+  const next=()=>{
+    const r=gq.shift(); if(!r){ gBusy=false; saveGeo(); return; }
+    const city=r.cityZh||"";
+    gc.getPoint((city?city+"市":"")+r.addr, pt=>{
+      const g={a:r.addr};
+      if(pt && r.bd0){ const p=[+pt.lat.toFixed(6), +pt.lng.toFixed(6)]; if(haversine(p,r.bd0)<50000) g.pt=p; }
+      S.geo[r.id]=g; render(); setTimeout(next,180);
+    }, city||undefined);
+  };
+  next();
+}
+
+/* ================= 店铺卡片 ================= */
+function navUrl(r,p){
+  if(["cn","hk","mo"].includes(r.cc) && p)
+    return `https://api.map.baidu.com/marker?location=${p[0]},${p[1]}&title=${enc(r.name)}&content=${enc(r.addr||r.loc)}&output=html&coord_type=bd09ll&src=webapp.michelinmap`;
+  if(typeof r.lat==="number") return `geo:${r.lat},${r.lng}?q=${r.lat},${r.lng}(${enc(r.name)})`;
+  return `https://www.google.com/maps/search/?api=1&query=${enc(r.name+" "+r.loc)}`;
+}
+function focusOn(id, fromList){
+  const r=S.byId.get(id); if(!r) return;
+  const prev=S.sel; S.sel=id;
+  const p=posOf(r);
+  if(S.map && p){
+    if(fromList){ setSheet("min"); S.map.centerAndZoom(bpt(p), Math.max(Math.round(S.map.getZoom()),16)); }
+    render();
+    if(r.cc==="cn" && r.addr) geocodeQueue([r]);
+  }
   openCard(r, p);
-  refresh(false);
+  if(prev!==id) refreshList();
 }
 function openCard(r, p){
-  const d=distOf(r);
-  $("#cNum").textContent=r.id; $("#cNum").className="num "+(r.price==="¥"?"p1":"p2");
+  const d=distOf(r), D=DIST[r.dist]||DIST.s;
+  $("#cBadge").textContent=D.t; $("#cBadge").className="badge "+D.k;
   $("#cName").textContent=r.name;
-  $("#cSub").textContent=`${r.cuisine} · ${r.price} · 必比登推介`+(d!=null?" · 距你 "+fmtDist(d):"");
-  $("#cAddr").textContent=r.addr;
-  $("#cNav").href = p ? navUrl(r,p) : searchUrl(r);
+  $("#cSub").textContent=[r.cuisine, r.price, r.green?"绿星":"", d!=null?"距你 "+fmtDist(d):""].filter(Boolean).join(" · ");
+  const place=[r.cityZh||r.city, r.cname].filter(Boolean).join("，");
+  $("#cAddr").textContent = r.addr ? `${r.addr}（${place}）` : `${r.loc||place}（详细地址待补充）`;
+  $("#cNav").href = navUrl(r,p);
   const tel=(r.phone||"").replace(/\s/g,"");
   $("#cTel").href = tel ? "tel:"+tel : "#"; $("#cTel").classList.toggle("off", !tel);
   $("#cMic").href = r.url;
   S.cardOpen=true; $("#card").classList.add("show"); setSheet("min");
 }
 function closeCard(){
-  if(!S.cardOpen) return;
+  if(!S.cardOpen && !S.sel) return;
   S.cardOpen=false; $("#card").classList.remove("show");
-  if(S.sel && S.markers[S.sel]){ const r=S.rows.find(x=>x.slug===S.sel); if(r) S.markers[S.sel].setIcon(pinIcon(r,false)); }
-  S.sel=null; setSheet(""); refresh(false);
+  S.sel=null; setSheet(""); render(); refreshList();
 }
-function fitAll(){
-  if(!S.map) return;
-  const pts = S.rows.filter(visible).map(posOf).filter(Boolean).map(bpt);
-  if(S.me) pts.push(bpt(S.me));
-  if(pts.length) S.map.setViewport(pts,{margins:[130,30,sheet.classList.contains("min")?110:window.innerHeight*0.46,30]});
+
+/* ================= 视野控制 ================= */
+function fitPoints(pts, maxZoom){
+  if(!S.map || !pts.length) return;
+  if(pts.length===1){ S.map.centerAndZoom(bpt(pts[0]), maxZoom||15); return; }
+  const step=Math.ceil(pts.length/600);
+  S.map.setViewport(pts.filter((_,i)=>i%step===0).map(bpt), {margins:[130,30,bottomPad(),30]});
 }
-function geocodeAll(){
-  const todo = S.rows.filter(r=>{ const g=S.geo[r.slug]; return !g || g.a!==r.addr; });
-  if(!todo.length || !S.map) return;
-  const gc = new BMX.Geocoder(); let i=0;
-  const next=()=>{
-    if(i>=todo.length){ saveGeo(); refresh(false); return; }
-    const r=todo[i++];
-    gc.getPoint("广州市"+r.addr, pt=>{
-      let g={a:r.addr};
-      // 优先用百度按地址解析的位置；米其林官网个别坐标有误（如雅苑），只作兜底
-      if(pt && inGZ(pt.lat,pt.lng)) g.pt=[+pt.lat.toFixed(6), +pt.lng.toFixed(6)];
-      S.geo[r.slug]=g; placeMarker(r); setTimeout(next,150);
-    },"广州市");
-  };
-  next();
+function fitResults(){ fitPoints(S.rows.filter(visible).map(posOf).filter(Boolean)); }
+
+/* ================= 地区面板 ================= */
+function buildRegions(){
+  const cnt={}; S.rows.forEach(r=>cnt[r.cc]=(cnt[r.cc]||0)+1);
+  const ccs=Object.keys(cnt);
+  const first=CC_FIRST.filter(c=>cnt[c]), rest=ccs.filter(c=>!CC_FIRST.includes(c)).sort((a,b)=>cnt[b]-cnt[a]);
+  const btn=c=>{ const n=S.rows.find(r=>r.cc===c); return `<button data-cc="${c}">${esc(COUNTRY[c]||(n&&n.cname)||c.toUpperCase())}<span>${fmtN(cnt[c])}</span></button>`; };
+  $("#regions").innerHTML=`<button data-cc="@me">我附近<span>定位</span></button><button data-cc="@world">全球<span>${fmtN(S.rows.length)}</span></button>`
+    +`<div class="sec">亚洲常用</div>`+first.map(btn).join("")+`<div class="sec">其他国家和地区（按餐厅数）</div>`+rest.map(btn).join("");
+  document.querySelectorAll("#regions button").forEach(b=>b.onclick=()=>{
+    $("#regionPanel").classList.remove("show");
+    const cc=b.dataset.cc;
+    if(cc==="@me"){ locate(); return; }
+    if(!S.map){ toast("地图未加载，已在列表中按地区筛选"); $("#q").value=COUNTRY[cc]||""; S.filt.terms=cc==="@world"?null:["@"+cc]; S.filt.q=$("#q").value; onFilter(); return; }
+    if(cc==="@world"){ S.map.centerAndZoom(new BMX.Point(60,30),2); return; }
+    fitPoints(S.rows.filter(r=>r.cc===cc).map(posOf).filter(Boolean));
+  });
 }
+$("#regionBtn").onclick=()=>$("#regionPanel").classList.add("show");
+$("#regionClose").onclick=()=>$("#regionPanel").classList.remove("show");
+
+/* ================= 百度地图 ================= */
 window.__bdInit = function(){
   clearTimeout(window.__bdTimer);
   window.BMX = ENGINE==="gl" ? window.BMapGL : window.BMap;
   if(!window.BMX){ diag("百度地图对象缺失（"+ENGINE+"）"); showMapProblem(); return; }
-  const map = new BMX.Map("map"); S.map=map;
-  map.centerAndZoom(new BMX.Point(113.29,23.12),12);
+  const map = new BMX.Map("map", ENGINE==="gl"?{minZoom:2}:{minZoom:2,enableMapClick:false}); S.map=map;
+  let v=null; try{ v=JSON.parse(store("bib_view")||"null"); }catch(e){}
+  if(v && typeof v.lng==="number") map.centerAndZoom(new BMX.Point(v.lng,v.lat), v.z||12);
+  else map.centerAndZoom(new BMX.Point(113.29,23.12),12);
   map.enableScrollWheelZoom(true);
   map.addControl(new BMX.ScaleControl({anchor:BMAP_ANCHOR_TOP_LEFT, offset:new BMX.Size(14,118)}));
   $("#nomap").style.display="none"; $("#setup").classList.remove("show");
   map.addEventListener("click", ()=>{ if(Date.now()-(S.markerTap||0) < 500) return; closeCard(); });
+  map.addEventListener("moveend", onMove); map.addEventListener("zoomend", onMove);
   diag("地图对象已创建（"+(ENGINE==="gl"?"新版":"兼容版")+"）");
   setTimeout(()=>{ const el=$("#map"); diag("地图区域尺寸 "+el.offsetWidth+"×"+el.offsetHeight+"，定位 "+getComputedStyle(el).position);
     if(el.offsetHeight<100){ S.sizeBad=true; showMapProblem(); } }, 1500);
   S.tilesOk=false;
   map.addEventListener("tilesloaded", ()=>{ if(!S.tilesOk) diag("底图已加载"); S.tilesOk=true; $("#mapwarn").classList.remove("show"); });
   setTimeout(()=>{ if(!S.tilesOk || S.sizeBad) showMapProblem(); }, 9000);
-  try{ S.rows.forEach(placeMarker); if(S.me){ showMe(false); fitNear(); } else fitAll(); geocodeAll(); }
+  try{ if(S.me){ showMe(); centerMe(); } render(); refreshList(); }
   catch(e){ diag("标记绘制出错: "+e.message); }
 };
 function showMapProblem(manual){
@@ -428,7 +593,7 @@ function showMapProblem(manual){
     tips=["先点“换地图模式”试试","还不行就点“复制诊断信息”发给我"];
   } else if(!gl && ENGINE==="gl"){
     why="手机的系统 WebView 不支持 WebGL，百度新版地图需要它。";
-    tips=["到应用商店更新“Android System WebView”和 Chrome","更新后重新打开本 App"];
+    tips=["点“换兼容模式”","或到应用商店更新“Android System WebView”和 Chrome"];
   } else if(/配额|quota|超限|超过/i.test(msg)){
     why="百度提示："+msg;
     tips=["这个 AK 今天的调用额度用完了，明天零点会自动恢复","也可以在百度控制台新建一个浏览器端 AK 换上"];
@@ -437,12 +602,13 @@ function showMapProblem(manual){
     tips=["到百度控制台核对这个 AK：应用类型是“浏览器端”，Referer 白名单是 *，状态为启用","核对无误后点“重新填写 AK”再粘贴一次"];
   } else {
     why="百度地图没有返回底图，也没有给出具体原因。";
-    tips=["先点“换地图模式”试试","到百度控制台核对这个 AK：应用类型是“浏览器端”，Referer 白名单只填一个 *，状态为启用","查看该 AK 当天的调用量是否已满","关闭 VPN 或代理后重新打开 App"];
+    tips=["先点“换地图模式”试试","到百度控制台核对这个 AK：应用类型是“浏览器端”，Referer 白名单只填一个 *，状态为启用","关闭 VPN 或代理后重新打开 App"];
   }
   $("#mwWhy").textContent=why;
   $("#mwTips").innerHTML=tips.map(t=>"<li>"+esc(t)+"</li>").join("");
   $("#mwSwitch").textContent = ENGINE==="gl" ? "换兼容模式" : "换回新版";
-  const info=["App 版本: "+(P.get("v")||"-"),"地图模式: "+(ENGINE==="gl"?"新版(GL)":"兼容版(3.0)"),"底图加载: "+(S.tilesOk?"是":"否"),"WebGL: "+(gl?"支持":"不支持"),"AK: "+(ak?ak.slice(0,4)+"…"+ak.slice(-4)+"（"+ak.length+" 位）":"未填写"),
+  const info=["App 版本: "+(P.get("v")||"-"),"地图模式: "+(ENGINE==="gl"?"新版(GL)":"兼容版(3.0)"),"底图加载: "+(S.tilesOk?"是":"否"),"WebGL: "+(gl?"支持":"不支持"),
+    "名单: "+(S.data?S.rows.length+" 家，"+S.data.updated:"未加载"),"AK: "+(ak?ak.slice(0,4)+"…"+ak.slice(-4)+"（"+ak.length+" 位）":"未填写"),
     "页面地址: "+location.origin,"浏览器: "+navigator.userAgent.replace(/^Mozilla\/5\.0 /,"")].concat(DIAG);
   $("#mwLog").textContent=info.join("\n");
   $("#mapwarn").classList.add("show");
@@ -460,30 +626,20 @@ function loadBaidu(ak){
 }
 
 /* ================= 我的位置 ================= */
-function showMe(center){
+function showMe(){
   if(!S.map || !S.me) return;
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="9" fill="#1a73e8" fill-opacity=".2"/><circle cx="11" cy="11" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="2"/></svg>`;
-  const icon=new BMX.Icon("data:image/svg+xml;charset=utf-8,"+enc(svg), new BMX.Size(22,22), {anchor:new BMX.Size(11,11)});
+  const icon=iconFor("me",()=>{ const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="9" fill="#1a73e8" fill-opacity=".2"/><circle cx="11" cy="11" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="2"/></svg>`;
+    return new BMX.Icon("data:image/svg+xml;charset=utf-8,"+enc(svg), new BMX.Size(22,22), {anchor:new BMX.Size(11,11)}); });
   if(S.meMarker) S.meMarker.setPosition(bpt(S.me));
   else { S.meMarker=new BMX.Marker(bpt(S.me),{icon}); S.map.addOverlay(S.meMarker); }
-  if(center) S.map.centerAndZoom(bpt(S.me), 14);
 }
-/* 地图缩放到“我 + 最近几家店”；人不在广州附近时显示全部餐厅 */
-function fitNear(){
-  if(!S.map || !S.me) return;
-  const near = S.rows.filter(visible).map(r=>({p:posOf(r), d:distOf(r)})).filter(x=>x.p && x.d!=null)
-    .sort((a,b)=>a.d-b.d);
-  if(!near.length){ showMe(true); return; }
-  if(near[0].d > 30000){ fitAll(); return; }
-  const pts=[bpt(S.me)].concat(near.slice(0,5).map(x=>bpt(x.p)));
-  S.map.setViewport(pts,{margins:[130,40,sheet.classList.contains("min")?110:window.innerHeight*0.46,40]});
-}
+function centerMe(){ if(S.map && S.me) S.map.centerAndZoom(bpt(S.me), 14); }
 function afterLocate(opts){
-    const ds = S.rows.map(distOf).filter(d=>d!=null);
-    const far = ds.length && Math.min(...ds) > 30000;
-    if(far){ if(S.sort==="near") setSort(""); else refresh(false); toast("你目前不在广州附近，已显示全部餐厅", 3500); }
-    else { setSort("near"); toast(opts.auto ? "已定位，附近的店排在最前面" : "已更新你的位置"); }
-    showMe(false); fitNear();
+  setSort("near");
+  showMe(); centerMe();
+  const near=S.rows.filter(visible).map(distOf).filter(d=>d!=null).sort((a,b)=>a-b)[0];
+  if(near!=null && near>50000) toast(`你附近 50 公里内没有米其林餐厅，最近的一家在 ${fmtDist(near)} 外`, 3500);
+  else toast(opts.auto ? "已定位，显示你附近的米其林餐厅" : "已更新你的位置");
 }
 /* opts.auto = 打开 App 时的自动定位：失败时安静处理，被拒绝后不再自动询问 */
 function locate(opts){
@@ -491,10 +647,10 @@ function locate(opts){
   if(!navigator.geolocation){ if(!opts.auto) toast("当前设备不支持定位"); return; }
   if(!opts.auto) toast("正在定位……",8000);
   navigator.geolocation.getCurrentPosition(pos=>{
-    const g=wgs2gcj(pos.coords.latitude,pos.coords.longitude); S.me=gcj2bd(g[0],g[1]);
+    const la=pos.coords.latitude, lo=pos.coords.longitude;
+    const g=inChinaBox(la,lo)? wgs2gcj(la,lo) : [la,lo]; S.me=gcj2bd(g[0],g[1]);
     store("bib_autoloc", null);
     $("#locBtn").classList.add("on");
-    // 名单还没读进来时，等名单就绪再决定排序和视野
     if(!S.data){ S.afterData = ()=>afterLocate(opts); return; }
     afterLocate(opts);
   }, err=>{
@@ -507,7 +663,7 @@ function locate(opts){
 }
 function setSort(s){
   S.sort=s; document.querySelectorAll("#sortSeg button").forEach(b=>b.classList.toggle("on", b.dataset.sort===s));
-  refresh(false); $("#list").scrollTop=0;
+  S.shown=80; refreshList(); $("#list").scrollTop=0;
 }
 document.querySelectorAll("#sortSeg button").forEach(b=>b.onclick=e=>{
   e.stopPropagation();
@@ -516,10 +672,11 @@ document.querySelectorAll("#sortSeg button").forEach(b=>b.onclick=e=>{
 });
 
 /* ================= 交互绑定 ================= */
-$("#q").oninput = e=>{ S.filt.q=e.target.value.trim(); refresh(true); };
+const fitSearch=debounce(()=>{ if(S.map && S.filt.terms){ const pts=S.rows.filter(visible).map(posOf).filter(Boolean); if(pts.length) fitPoints(pts); } }, 700);
+$("#q").oninput = e=>{ S.filt.q=e.target.value.trim(); S.filt.terms=qTerms(S.filt.q); onFilter(); fitSearch(); };
 $("#q").onfocus = ()=>{ if(sheet.classList.contains("min")) setSheet(""); };
-const PRICES=["","¥","¥¥"], PLABEL={"":"价位","¥":"¥ 实惠","¥¥":"¥¥ 中档"};
-$("#priceBtn").onclick = ()=>{ S.filt.price = PRICES[(PRICES.indexOf(S.filt.price)+1)%3]; $("#priceBtn").textContent=PLABEL[S.filt.price]; $("#priceBtn").classList.toggle("on",!!S.filt.price); refresh(true); };
+const PL=["价位","实惠","中等","较贵","奢华"];
+$("#priceBtn").onclick = ()=>{ S.filt.lvl=(S.filt.lvl+1)%5; $("#priceBtn").textContent=PL[S.filt.lvl]; $("#priceBtn").classList.toggle("on",!!S.filt.lvl); onFilter(); };
 $("#setBtn").onclick = ()=>{ $("#akInput").value=store("bib_ak")||""; $("#akErr").textContent=""; $("#setup").classList.add("show"); };
 $("#akSkip").onclick = ()=>{ $("#setup").classList.remove("show"); setSheet("full"); };
 $("#akBtn").onclick = ()=>{
@@ -530,11 +687,16 @@ $("#akBtn").onclick = ()=>{
   loadBaidu(ak);
 };
 $("#locBtn").onclick = ()=>locate();
-$("#fitBtn").onclick = fitAll;
+$("#fitBtn").onclick = fitResults;
 $("#cardX").onclick = closeCard;
-// 安卓返回键：先关闭卡片或设置页，再退出
-window.__onBack = ()=>{ if($("#mapwarn").classList.contains("show")){ $("#mapwarn").classList.remove("show"); return true; }
-  if(S.cardOpen){ closeCard(); return true; } if($("#setup").classList.contains("show") && S.map){ $("#setup").classList.remove("show"); return true; } return false; };
+// 安卓返回键：先关闭卡片、面板，再退出
+window.__onBack = ()=>{
+  if($("#mapwarn").classList.contains("show")){ $("#mapwarn").classList.remove("show"); return true; }
+  if($("#regionPanel").classList.contains("show")){ $("#regionPanel").classList.remove("show"); return true; }
+  if(S.cardOpen){ closeCard(); return true; }
+  if($("#setup").classList.contains("show") && S.map){ $("#setup").classList.remove("show"); return true; }
+  if(S.filt.q){ $("#q").value=""; S.filt.q=""; S.filt.terms=null; onFilter(); return true; }
+  return false; };
 $("#mwSwitch").onclick = switchEngine;
 $("#engBtn").textContent = "地图模式：" + (ENGINE==="gl" ? "新版" : "兼容版");
 $("#engBtn").onclick = switchEngine;
