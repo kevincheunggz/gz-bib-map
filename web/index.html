@@ -189,6 +189,7 @@ async function loadData(){
   let bundled=null; try{ bundled = await fetchJSON("restaurants.json", 4000); }catch(e){}
   const best = newer(cached, bundled);
   if(best){ prepare(best); buildChips(); rebuildMarkers(); refresh(true); }
+  if(S.data && S.afterData){ const f=S.afterData; S.afterData=null; f(); }
   if(!REMOTE) return;
   try{
     const remote = await fetchJSON(REMOTE+"?t="+Math.floor(Date.now()/36e5), 9000);
@@ -345,7 +346,7 @@ window.__bdInit = function(){
   map.enableScrollWheelZoom(true);
   map.addControl(new BMapGL.ScaleControl({anchor:BMAP_ANCHOR_TOP_LEFT, offset:new BMapGL.Size(14,118)}));
   $("#nomap").style.display="none"; $("#setup").classList.remove("show");
-  S.rows.forEach(placeMarker); if(S.me) showMe(false); fitAll(); geocodeAll();
+  S.rows.forEach(placeMarker); if(S.me){ showMe(false); fitNear(); } else fitAll(); geocodeAll();
 };
 function loadBaidu(ak){
   $("#akErr").textContent="正在加载地图……";
@@ -365,17 +366,41 @@ function showMe(center){
   else { S.meMarker=new BMapGL.Marker(bpt(S.me),{icon}); S.map.addOverlay(S.meMarker); }
   if(center) S.map.centerAndZoom(bpt(S.me), 14);
 }
-function locate(thenSort){
-  if(!navigator.geolocation){ toast("当前设备不支持定位"); return; }
-  toast("正在定位……",8000);
+/* 地图缩放到“我 + 最近几家店”；人不在广州附近时显示全部餐厅 */
+function fitNear(){
+  if(!S.map || !S.me) return;
+  const near = S.rows.filter(visible).map(r=>({p:posOf(r), d:distOf(r)})).filter(x=>x.p && x.d!=null)
+    .sort((a,b)=>a.d-b.d);
+  if(!near.length){ showMe(true); return; }
+  if(near[0].d > 30000){ fitAll(); return; }
+  const pts=[bpt(S.me)].concat(near.slice(0,5).map(x=>bpt(x.p)));
+  S.map.setViewport(pts,{margins:[130,40,sheet.classList.contains("min")?110:window.innerHeight*0.46,40]});
+}
+function afterLocate(opts){
+    const ds = S.rows.map(distOf).filter(d=>d!=null);
+    const far = ds.length && Math.min(...ds) > 30000;
+    if(far){ if(S.sort==="near") setSort(""); else refresh(false); toast("你目前不在广州附近，已显示全部餐厅", 3500); }
+    else { setSort("near"); toast(opts.auto ? "已定位，附近的店排在最前面" : "已更新你的位置"); }
+    showMe(false); fitNear();
+}
+/* opts.auto = 打开 App 时的自动定位：失败时安静处理，被拒绝后不再自动询问 */
+function locate(opts){
+  opts = opts||{};
+  if(!navigator.geolocation){ if(!opts.auto) toast("当前设备不支持定位"); return; }
+  if(!opts.auto) toast("正在定位……",8000);
   navigator.geolocation.getCurrentPosition(pos=>{
     const g=wgs2gcj(pos.coords.latitude,pos.coords.longitude); S.me=gcj2bd(g[0],g[1]);
-    $("#locBtn").classList.add("on"); toast("已定位，列表可按距离排序");
-    if(thenSort) setSort("near"); else refresh(false);
-    showMe(true);
+    store("bib_autoloc", null);
+    $("#locBtn").classList.add("on");
+    // 名单还没读进来时，等名单就绪再决定排序和视野
+    if(!S.data){ S.afterData = ()=>afterLocate(opts); return; }
+    afterLocate(opts);
   }, err=>{
-    toast(err.code===1 ? "没有定位权限，请在系统设置里允许本 App 使用位置" : "定位失败，请稍后再试", 3500);
-    if(thenSort) setSort("");
+    if(err.code===1){
+      if(opts.auto) store("bib_autoloc","off");
+      toast(opts.auto ? "未获得定位权限，可点右侧定位按钮重试" : "没有定位权限，请在系统设置里允许本 App 使用位置", 3500);
+    } else if(!opts.auto) toast("定位失败，请稍后再试", 3500);
+    if(S.sort==="near" && !S.me) setSort("");
   }, {enableHighAccuracy:true, timeout:12000, maximumAge:60000});
 }
 function setSort(s){
@@ -384,7 +409,7 @@ function setSort(s){
 }
 document.querySelectorAll("#sortSeg button").forEach(b=>b.onclick=e=>{
   e.stopPropagation();
-  if(b.dataset.sort==="near" && !S.me){ setSort("near"); locate(true); return; }
+  if(b.dataset.sort==="near" && !S.me){ setSort("near"); locate(); return; }
   setSort(b.dataset.sort); if(sheet.classList.contains("min")) setSheet("");
 });
 
@@ -402,7 +427,7 @@ $("#akBtn").onclick = ()=>{
   if(S.map){ $("#setup").classList.remove("show"); return; }
   loadBaidu(ak);
 };
-$("#locBtn").onclick = ()=>{ if(S.me && S.map){ showMe(true); return; } locate(false); };
+$("#locBtn").onclick = ()=>locate();
 $("#fitBtn").onclick = fitAll;
 
 /* ================= 启动 ================= */
@@ -411,6 +436,8 @@ const urlAk = P.get("ak"); if(urlAk) store("bib_ak", urlAk);
 const ak = store("bib_ak");
 if(ak) loadBaidu(ak); else $("#setup").classList.add("show");
 loadData();
+// 打开即自动定位（用户曾拒绝定位权限时不再自动询问，可手动点定位按钮）
+if(store("bib_autoloc")!=="off") locate({auto:true});
 </script>
 </body>
 </html>
