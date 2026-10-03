@@ -12,8 +12,9 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:14px}
-  #map{position:fixed;inset:0;background:#ece8e2}
-  .nomap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;padding:0 24px 50vh;text-align:center;
+  #mapwrap{position:fixed;left:0;top:0;width:100vw;height:100vh;height:100dvh;background:#ece8e2;z-index:0}
+  #map{width:100%;height:100%}
+  .nomap{position:fixed;left:0;top:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;padding:0 24px 50vh;text-align:center;
     background:repeating-linear-gradient(135deg,#f3efe9 0 14px,#efeae3 14px 28px)}
 
   /* 顶部 */
@@ -78,7 +79,7 @@
   .toast.show{opacity:1}
 
   /* 首次设置 */
-  .setup{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;overflow-y:auto;padding:calc(env(safe-area-inset-top) + 28px) 18px 30px}
+  .setup{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:50;background:var(--bg);display:none;overflow-y:auto;padding:calc(env(safe-area-inset-top) + 28px) 18px 30px}
   .setup.show{display:block}
   .setup h2{margin:0 0 8px;font-size:20px}
   .setup p,.setup li{color:#444;line-height:1.7;font-size:14px}
@@ -103,7 +104,7 @@
 </style>
 </head>
 <body>
-<div id="map"></div>
+<div id="mapwrap"><div id="map"></div></div>
 <div class="nomap" id="nomap">地图未加载。点右上角“设置”填写百度地图 AK，或直接在下方列表中浏览。</div>
 
 <div class="top">
@@ -134,11 +135,12 @@
 
 <div class="toast" id="toast"></div>
 <div class="mapwarn" id="mapwarn">
-  <h3>地图底图没有加载出来</h3>
+  <h3 id="mwTitle">地图没有正常显示</h3>
   <div class="why" id="mwWhy">百度地图没有返回底图。</div>
   <ul id="mwTips"></ul>
   <pre id="mwLog"></pre>
-  <div class="btns"><button id="mwCopy">复制诊断信息</button><button id="mwClose">关闭</button><button class="pri" id="mwAk">重新填写 AK</button></div>
+  <div class="btns"><button id="mwCopy">复制诊断信息</button><button class="pri" id="mwSwitch">换兼容模式</button></div>
+  <div class="btns"><button id="mwAk">重新填写 AK</button><button id="mwClose">关闭</button></div>
 </div>
 
 <div class="setup" id="setup">
@@ -152,6 +154,7 @@
   <input id="akInput" placeholder="粘贴百度地图 AK" autocomplete="off" autocapitalize="off" spellcheck="false">
   <div class="btns"><button class="skip" id="akSkip">先看列表</button><button class="go" id="akBtn">保存并加载</button></div>
   <div class="err" id="akErr"></div>
+  <div class="btns" style="margin-top:4px"><button class="skip" id="diagBtn">诊断信息</button><button class="skip" id="engBtn">地图模式</button></div>
   <p style="font-size:12.5px;color:var(--muted);margin-top:18px">名单来自米其林指南官网，每月自动核对一次，有变化时 App 打开即会更新。地址定位使用百度地图解析。</p>
 </div>
 
@@ -167,6 +170,8 @@ window.alert = function(m){ diag("百度提示: "+m); S && (S.baiduMsg = String(
 function hasWebGL(){ try{ const c=document.createElement("canvas"); return !!(c.getContext("webgl")||c.getContext("experimental-webgl")); }catch(e){ return false; } }
 
 /* ================= 基础 ================= */
+let ENGINE = (function(){ try{ return localStorage.getItem("bib_engine"); }catch(e){ return null; } })() || (hasWebGL() ? "gl" : "classic");
+function switchEngine(){ try{ localStorage.setItem("bib_engine", ENGINE==="gl"?"classic":"gl"); }catch(e){} location.reload(); }
 const P = new URLSearchParams(location.search);
 const REPO = P.get("repo") || "";
 const REMOTE = REPO ? `https://cdn.jsdelivr.net/gh/${REPO}@main/data/restaurants.json` : "";
@@ -307,14 +312,14 @@ function pinIcon(r, big){
   const c = r.price==="¥" ? "#c8102e" : "#1f4e79";
   const w = big?38:28, h = big?48:36;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 28 36"><path d="M14 35s11-11.6 11-20.5C25 7.6 20.1 3 14 3S3 7.6 3 14.5C3 23.4 14 35 14 35z" fill="${c}" stroke="#fff" stroke-width="2"/><text x="14" y="18.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="${r.id>9?10:11}" font-weight="700" fill="#fff">${r.id}</text></svg>`;
-  return new BMapGL.Icon("data:image/svg+xml;charset=utf-8,"+enc(svg), new BMapGL.Size(w,h), {anchor:new BMapGL.Size(w/2,h)});
+  return new BMX.Icon("data:image/svg+xml;charset=utf-8,"+enc(svg), new BMX.Size(w,h), {anchor:new BMX.Size(w/2,h)});
 }
-function bpt(p){ return new BMapGL.Point(p[1], p[0]); }
+function bpt(p){ return new BMX.Point(p[1], p[0]); }
 function placeMarker(r){
   const p = posOf(r); if(!p || !S.map) return;
   let m = S.markers[r.slug];
   if(!m){
-    m = new BMapGL.Marker(bpt(p), {icon:pinIcon(r,S.sel===r.slug), title:r.name});
+    m = new BMX.Marker(bpt(p), {icon:pinIcon(r,S.sel===r.slug), title:r.name});
     m.addEventListener("click", ()=>focusOn(r.slug,false));
     S.map.addOverlay(m); S.markers[r.slug]=m;
     if(!visible(r)) m.hide();
@@ -341,7 +346,7 @@ function focusOn(slug, fromList){
     <div class="s">${esc(r.cuisine)} · ${esc(r.price)} · 必比登推介${d!=null?" · 距你 "+fmtDist(d):""}</div>
     <div>${esc(r.addr)}</div>
     <div class="acts"><a class="pri" href="${navUrl(r,p)}">导航</a>${r.phone?`<a href="tel:${esc(r.phone.replace(/\s/g,""))}">电话</a>`:""}<a href="${esc(r.url)}">米其林点评</a></div></div>`;
-  S.map.openInfoWindow(new BMapGL.InfoWindow(html,{width:0,offset:new BMapGL.Size(0,-34)}), m.getPosition());
+  S.map.openInfoWindow(new BMX.InfoWindow(html,{width:0,offset:new BMX.Size(0,-34)}), m.getPosition());
   refresh(false);
 }
 function fitAll(){
@@ -353,7 +358,7 @@ function fitAll(){
 function geocodeAll(){
   const todo = S.rows.filter(r=>{ const g=S.geo[r.slug]; return !g || g.a!==r.addr; });
   if(!todo.length || !S.map) return;
-  const gc = new BMapGL.Geocoder(); let i=0;
+  const gc = new BMX.Geocoder(); let i=0;
   const next=()=>{
     if(i>=todo.length){ saveGeo(); refresh(false); return; }
     const r=todo[i++];
@@ -368,22 +373,32 @@ function geocodeAll(){
 }
 window.__bdInit = function(){
   clearTimeout(window.__bdTimer);
-  const map = new BMapGL.Map("map"); S.map=map;
-  map.centerAndZoom(new BMapGL.Point(113.29,23.12),12);
+  window.BMX = ENGINE==="gl" ? window.BMapGL : window.BMap;
+  if(!window.BMX){ diag("百度地图对象缺失（"+ENGINE+"）"); showMapProblem(); return; }
+  const map = new BMX.Map("map"); S.map=map;
+  map.centerAndZoom(new BMX.Point(113.29,23.12),12);
   map.enableScrollWheelZoom(true);
-  map.addControl(new BMapGL.ScaleControl({anchor:BMAP_ANCHOR_TOP_LEFT, offset:new BMapGL.Size(14,118)}));
+  map.addControl(new BMX.ScaleControl({anchor:BMAP_ANCHOR_TOP_LEFT, offset:new BMX.Size(14,118)}));
   $("#nomap").style.display="none"; $("#setup").classList.remove("show");
-  diag("地图对象已创建");
+  diag("地图对象已创建（"+(ENGINE==="gl"?"新版":"兼容版")+"）");
+  setTimeout(()=>{ const el=$("#map"); diag("地图区域尺寸 "+el.offsetWidth+"×"+el.offsetHeight+"，定位 "+getComputedStyle(el).position);
+    if(el.offsetHeight<100){ S.sizeBad=true; showMapProblem(); } }, 1500);
   S.tilesOk=false;
   map.addEventListener("tilesloaded", ()=>{ if(!S.tilesOk) diag("底图已加载"); S.tilesOk=true; $("#mapwarn").classList.remove("show"); });
-  setTimeout(()=>{ if(!S.tilesOk) showMapProblem(); }, 9000);
+  setTimeout(()=>{ if(!S.tilesOk || S.sizeBad) showMapProblem(); }, 9000);
   try{ S.rows.forEach(placeMarker); if(S.me){ showMe(false); fitNear(); } else fitAll(); geocodeAll(); }
   catch(e){ diag("标记绘制出错: "+e.message); }
 };
-function showMapProblem(){
+function showMapProblem(manual){
   const ak=store("bib_ak")||"", gl=hasWebGL(), msg=S.baiduMsg||"";
   let why, tips;
-  if(!gl){
+  $("#mwTitle").textContent = manual ? "诊断信息" : "地图没有正常显示";
+  if(manual && S.tilesOk && !S.sizeBad && !msg){
+    why="地图运行正常。"; tips=[];
+  } else if(S.sizeBad){
+    why="地图区域没有撑开（高度过小），底图画不出来。";
+    tips=["先点“换地图模式”试试","还不行就点“复制诊断信息”发给我"];
+  } else if(!gl && ENGINE==="gl"){
     why="手机的系统 WebView 不支持 WebGL，百度新版地图需要它。";
     tips=["到应用商店更新“Android System WebView”和 Chrome","更新后重新打开本 App"];
   } else if(/配额|quota|超限|超过/i.test(msg)){
@@ -394,11 +409,12 @@ function showMapProblem(){
     tips=["到百度控制台核对这个 AK：应用类型是“浏览器端”，Referer 白名单是 *，状态为启用","核对无误后点“重新填写 AK”再粘贴一次"];
   } else {
     why="百度地图没有返回底图，也没有给出具体原因。";
-    tips=["到百度控制台核对这个 AK：应用类型是“浏览器端”，Referer 白名单只填一个 *，状态为启用","查看该 AK 当天的调用量是否已满","关闭 VPN 或代理后重新打开 App"];
+    tips=["先点“换地图模式”试试","到百度控制台核对这个 AK：应用类型是“浏览器端”，Referer 白名单只填一个 *，状态为启用","查看该 AK 当天的调用量是否已满","关闭 VPN 或代理后重新打开 App"];
   }
   $("#mwWhy").textContent=why;
   $("#mwTips").innerHTML=tips.map(t=>"<li>"+esc(t)+"</li>").join("");
-  const info=["App 版本: "+(P.get("v")||"-"),"WebGL: "+(gl?"支持":"不支持"),"AK: "+(ak?ak.slice(0,4)+"…"+ak.slice(-4)+"（"+ak.length+" 位）":"未填写"),
+  $("#mwSwitch").textContent = ENGINE==="gl" ? "换兼容模式" : "换回新版";
+  const info=["App 版本: "+(P.get("v")||"-"),"地图模式: "+(ENGINE==="gl"?"新版(GL)":"兼容版(3.0)"),"底图加载: "+(S.tilesOk?"是":"否"),"WebGL: "+(gl?"支持":"不支持"),"AK: "+(ak?ak.slice(0,4)+"…"+ak.slice(-4)+"（"+ak.length+" 位）":"未填写"),
     "页面地址: "+location.origin,"浏览器: "+navigator.userAgent.replace(/^Mozilla\/5\.0 /,"")].concat(DIAG);
   $("#mwLog").textContent=info.join("\n");
   $("#mapwarn").classList.add("show");
@@ -407,7 +423,9 @@ window.showMapProblem = showMapProblem;
 function loadBaidu(ak){
   $("#akErr").textContent="正在加载地图……";
   const s=document.createElement("script");
-  s.src=`https://api.map.baidu.com/api?v=1.0&type=webgl&ak=${enc(ak)}&callback=__bdInit`;
+  s.src = ENGINE==="gl" ? `https://api.map.baidu.com/api?v=1.0&type=webgl&ak=${enc(ak)}&callback=__bdInit`
+                       : `https://api.map.baidu.com/api?v=3.0&s=1&ak=${enc(ak)}&callback=__bdInit`;
+  diag("开始加载百度地图（"+(ENGINE==="gl"?"新版":"兼容版")+"）");
   s.onerror=()=>{ diag("百度地图脚本加载失败"); $("#akErr").textContent="地图脚本加载失败，请检查网络。"; $("#setup").classList.add("show"); };
   document.head.appendChild(s);
   window.__bdTimer=setTimeout(()=>{ if(!S.map){ $("#akErr").textContent="地图没有加载成功。请确认 AK 类型是“浏览器端”、Referer 白名单为 *、应用已启用。"; $("#setup").classList.add("show"); } },10000);
@@ -417,9 +435,9 @@ function loadBaidu(ak){
 function showMe(center){
   if(!S.map || !S.me) return;
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="9" fill="#1a73e8" fill-opacity=".2"/><circle cx="11" cy="11" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="2"/></svg>`;
-  const icon=new BMapGL.Icon("data:image/svg+xml;charset=utf-8,"+enc(svg), new BMapGL.Size(22,22), {anchor:new BMapGL.Size(11,11)});
+  const icon=new BMX.Icon("data:image/svg+xml;charset=utf-8,"+enc(svg), new BMX.Size(22,22), {anchor:new BMX.Size(11,11)});
   if(S.meMarker) S.meMarker.setPosition(bpt(S.me));
-  else { S.meMarker=new BMapGL.Marker(bpt(S.me),{icon}); S.map.addOverlay(S.meMarker); }
+  else { S.meMarker=new BMX.Marker(bpt(S.me),{icon}); S.map.addOverlay(S.meMarker); }
   if(center) S.map.centerAndZoom(bpt(S.me), 14);
 }
 /* 地图缩放到“我 + 最近几家店”；人不在广州附近时显示全部餐厅 */
@@ -485,6 +503,10 @@ $("#akBtn").onclick = ()=>{
 };
 $("#locBtn").onclick = ()=>locate();
 $("#fitBtn").onclick = fitAll;
+$("#mwSwitch").onclick = switchEngine;
+$("#engBtn").textContent = "地图模式：" + (ENGINE==="gl" ? "新版" : "兼容版");
+$("#engBtn").onclick = switchEngine;
+$("#diagBtn").onclick = ()=>{ $("#setup").classList.remove("show"); showMapProblem(true); };
 $("#mwClose").onclick = ()=>$("#mapwarn").classList.remove("show");
 $("#mwAk").onclick = ()=>{ $("#mapwarn").classList.remove("show"); $("#setBtn").click(); };
 $("#mwCopy").onclick = async ()=>{
