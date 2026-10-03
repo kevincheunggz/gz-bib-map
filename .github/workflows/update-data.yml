@@ -1,9 +1,17 @@
-name: 每月更新餐厅名单
+name: 更新餐厅名单
 
+# 每天运行一次：
+#   - 列表距上次刷新满 25 天时，重新抓全球列表（约 400 页，二三十分钟）
+#   - 其余时间给还没有地址的餐厅补抓详情页（每次最多 60 分钟）
 on:
   schedule:
-    - cron: "17 2 1 * *"   # 每月 1 日北京时间 10:17
-  workflow_dispatch:        # 也可在 Actions 页面手动运行
+    - cron: "17 2 * * *"   # 北京时间每天 10:17
+  workflow_dispatch:
+    inputs:
+      force_list:
+        description: "强制重新抓取全球列表"
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths: ["scripts/**", ".github/workflows/update-data.yml"]
@@ -18,7 +26,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
 
@@ -26,25 +34,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 安装依赖
-        run: pip install requests beautifulsoup4
+      - name: 安装依赖与无头浏览器
+        run: |
+          pip install playwright beautifulsoup4 lxml
+          python -m playwright install --with-deps chromium
 
       - name: 抓取米其林名单
-        id: scrape
         run: |
-          set +e
-          python scripts/scrape.py
-          code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          if [ $code -ne 0 ] && [ $code -ne 3 ]; then exit $code; fi
-          exit 0
-
-      - name: 普通请求被拦截时改用无头浏览器
-        if: steps.scrape.outputs.code == '3'
-        run: |
-          pip install playwright
-          python -m playwright install --with-deps chromium
-          python scripts/scrape.py --browser
+          ARGS="--details 60"
+          if [ "${{ inputs.force_list }}" = "true" ]; then ARGS="$ARGS --list"; fi
+          python scripts/scrape.py $ARGS
 
       - name: 提交变化
         id: commit
@@ -55,7 +54,8 @@ jobs:
           if git diff --cached --quiet; then
             echo "名单无变化"; echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "更新必比登名单 $(date -u -d '+8 hour' +%F)"
+            git commit -m "更新米其林名单 $(date -u -d '+8 hour' +%F)"
+            git pull --rebase origin main
             git push
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi

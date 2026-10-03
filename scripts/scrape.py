@@ -1,140 +1,156 @@
 #!/usr/bin/env python3
-"""抓取米其林指南广州必比登名单，更新 data/restaurants.json。
+"""抓取米其林指南全球餐厅（三星、二星、一星、必比登、入选），维护 data/restaurants.json。
+
+米其林网站对普通 HTTP 请求返回人机验证页，所以用 Playwright 无头浏览器抓取。
+
+两个阶段：
+  1. 列表阶段：抓全部列表页（约 400 页），得到每家的坐标、星级、价位、菜系、城市、国家。
+     距上次列表抓取不足 LIST_INTERVAL_DAYS 天时跳过（除非 --list）。
+  2. 详情阶段：给还没有地址的餐厅补抓详情页的地址和电话，在时间预算内尽量多抓，
+     中国内地、港澳台、日韩、新加坡优先。
+
+安全措施：列表抓到的数量少于上次的 60% 时不覆盖名单，以非零状态退出。
 
 用法:
-  python scripts/scrape.py            # 先用 requests 抓取
-  python scripts/scrape.py --browser  # 用 Playwright 无头浏览器抓取（网站拦截普通请求时）
-
-安全措施: 抓到的餐厅数明显少于上次（< 60%）时不写文件并以非零状态退出，
-避免网站改版导致名单被清空。
+  python scripts/scrape.py               # 按需刷新列表 + 补抓详情
+  python scripts/scrape.py --list        # 强制刷新列表
+  python scripts/scrape.py --details 30  # 详情阶段最多运行 30 分钟
 """
 import argparse
 import datetime as dt
-import html
+import html as htmllib
 import json
 import re
 import sys
 import time
-import urllib.parse
 from pathlib import Path
 
 BASE = "https://guide.michelin.com"
-LIST_URL = BASE + "/sg/zh_CN/guangdong/guangzhou_1026985/restaurants/bib-gourmand"
+SITE = BASE + "/sg/zh_CN"
+LIST_URL = SITE + "/restaurants"
 DATA = Path(__file__).resolve().parent.parent / "data" / "restaurants.json"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/128.0 Safari/537.36")
-TODAY = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).date().isoformat()
+TZ = dt.timezone(dt.timedelta(hours=8))
+TODAY = dt.datetime.now(TZ).date().isoformat()
+LIST_INTERVAL_DAYS = 25
+PRIORITY = ["cn", "hk", "mo", "tw", "jp", "kr", "sg", "th", "my", "vn", "ph"]
+
+FIELDS = ["id", "name", "dist", "green", "price", "cuisine", "city", "loc", "cc",
+          "lat", "lng", "path", "addr", "phone", "added"]
+DIST = {"THREE_STARS": "3", "TWO_STARS": "2", "ONE_STAR": "1", "BIB_GOURMAND": "b"}
 
 
-class Blocked(Exception):
-    pass
+def log(*a):
+    print(*a, flush=True)
 
 
-# ---------------------------------------------------------------- 抓取
-class Fetcher:
-    def __init__(self, browser=False):
-        self.browser = browser
-        self._page = None
-        if not browser:
-            import requests
-            self.s = requests.Session()
-            self.s.headers.update({"User-Agent": UA, "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.6",
-                                   "Accept": "text/html,application/xhtml+xml"})
+def clean(s):
+    return re.sub(r"\s+", " ", htmllib.unescape(s or "")).strip()
 
-    def get(self, url):
-        if self.browser:
-            return self._get_browser(url)
+
+# ---------------------------------------------------------------- 浏览器
+class Browser:
+    def __init__(self):
+        from playwright.sync_api import sync_playwright
+        self._pw = sync_playwright().start()
+        self._b = self._pw.chromium.launch()
+        self._new_page()
+
+    def _new_page(self):
+        ctx = self._b.new_context(user_agent=UA, locale="zh-CN", viewport={"width": 1280, "height": 900})
+        # 不加载图片字体，加快速度、减轻对方服务器负担
+        ctx.route(re.compile(r".*\.(png|jpe?g|webp|gif|svg|woff2?|ttf|mp4)(\?.*)?$"), lambda r: r.abort())
+        self.page = ctx.new_page()
+
+    def get(self, url, ready_selector, tries=3):
         last = None
-        for attempt in range(3):
+        for attempt in range(tries):
             try:
-                r = self.s.get(url, timeout=30)
-                if r.status_code in (403, 429, 503):
-                    raise Blocked(f"HTTP {r.status_code} {url}")
-                r.raise_for_status()
-                r.encoding = "utf-8"
-                if "/restaurant/" not in r.text and "restaurant" not in r.text:
-                    raise Blocked("页面内容异常，可能被拦截: " + url)
-                return r.text
-            except Blocked:
-                raise
-            except Exception as e:  # 网络抖动重试
-                last = e
-                time.sleep(3 * (attempt + 1))
+                resp = self.page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                for _ in range(30):  # 等人机验证自动通过、内容出现
+                    if self.page.query_selector(ready_selector):
+                        break
+                    if resp is not None and resp.status == 404:
+                        return 404, ""
+                    self.page.wait_for_timeout(1000)
+                html = self.page.content()
+                if self.page.query_selector(ready_selector):
+                    return 200, html
+                last = f"内容未出现 (HTTP {resp.status if resp else '-'})"
+            except Exception as e:
+                last = str(e)[:200]
+            time.sleep(5 * (attempt + 1))
+            if attempt == 1:
+                try:
+                    self.page.context.close()
+                except Exception:
+                    pass
+                self._new_page()
         raise RuntimeError(f"抓取失败 {url}: {last}")
 
-    def _get_browser(self, url):
-        if self._page is None:
-            from playwright.sync_api import sync_playwright
-            self._pw = sync_playwright().start()
-            self._b = self._pw.chromium.launch()
-            self._page = self._b.new_page(user_agent=UA, locale="zh-CN")
-        self._page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        self._page.wait_for_timeout(1500)
-        return self._page.content()
-
     def close(self):
-        if self._page is not None:
+        try:
             self._b.close()
             self._pw.stop()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------- 解析
-def clean(s):
-    return re.sub(r"\s+", " ", html.unescape(s or "")).strip()
-
-
-def short_addr(a):
-    a = clean(a)
-    a = re.sub(r",\s*(Guangzhou|广州).*$", "", a)
-    return a.strip(" ,")
-
-
-def parse_listing(page):
-    """返回 [(slug, name, price, cuisine, lat, lng)]，保持页面顺序。"""
+def parse_list(page_html):
     from bs4 import BeautifulSoup
-    soup = BeautifulSoup(page, "html.parser")
-    out, seen = [], set()
-    for h in soup.find_all(["h3", "h2"]):
-        a = h.find("a", href=re.compile(r"/restaurant/[^/?#]+"))
+    try:
+        soup = BeautifulSoup(page_html, "lxml")
+    except Exception:
+        soup = BeautifulSoup(page_html, "html.parser")
+    out = []
+    for c in soup.select("div.card__menu.js-restaurant__list_item"):
+        # 跳过页面底部“探索新精选餐厅”等推荐卡片
+        if c.find_parent(class_=re.compile(r"section-nearby|nearby-restaurants")):
+            continue
+        a = c.select_one("h3 a[href*='/restaurant/']")
         if not a:
             continue
-        m = re.search(r"/restaurant/([^/?#]+)", a["href"])
-        slug = urllib.parse.quote(urllib.parse.unquote(m.group(1)), safe="-_.~")
-        if slug in seen:
-            continue
-        # 只要广州的卡片（页面底部有新加坡推荐卡）
-        if "guangzhou" not in a["href"]:
-            continue
-        seen.add(slug)
-        # 向上找到恰好包住这一张卡片（含价位与菜系）的容器
-        card = h
-        for _ in range(7):
-            parent = card.parent
-            if parent is None or parent.name in ("body", "html"):
-                break
-            if len(parent.find_all(["h3", "h2"])) > 1:
-                break
-            card = parent
-            if card.has_attr("data-lat") or re.search(r"[¥$]{1,4}\s*·", card.get_text(" ")):
-                break
-        text = clean(card.get_text(" "))
+        bk = c.select_one(".js-bookmark-restaurant") or c.select_one("[data-dtm-id]") or c
+        try:
+            lat, lng = round(float(c.get("data-lat")), 6), round(float(c.get("data-lng")), 6)
+        except (TypeError, ValueError):
+            lat = lng = None
+        scores = [clean(x.get_text(" ")) for x in c.select(".card__menu-footer--score")]
+        loc = scores[0] if scores else ""
         price, cuisine = "", ""
-        pm = re.search(r"(¥{1,4}|\${1,4})\s*·\s*([^\s·]+)", text)
-        if pm:
-            price, cuisine = pm.group(1).replace("$", "¥"), pm.group(2)
-        lat = lng = None
-        holder = card if card.has_attr("data-lat") else (card.find(attrs={"data-lat": True}) or h.find_parent(attrs={"data-lat": True}))
-        if holder is not None:
-            try:
-                lat, lng = float(holder["data-lat"]), float(holder.get("data-lng") or holder.get("data-lon"))
-            except (TypeError, ValueError, KeyError):
-                lat = lng = None
-        out.append((slug, clean(a.get_text()), price, cuisine, lat, lng))
-    return out
+        if len(scores) > 1:
+            parts = [p.strip() for p in scores[1].split("·")]
+            if len(parts) >= 2:
+                price, cuisine = parts[0], "·".join(parts[1:]).strip()
+            else:
+                cuisine = parts[0]
+        dist = DIST.get(bk.get("data-distinction") or bk.get("data-dtm-distinction") or "", "s")
+        href = a["href"].split("?")[0]
+        out.append({
+            "id": int(c.get("data-id") or bk.get("data-dtm-id") or 0),
+            "name": clean(a.get_text()),
+            "dist": dist,
+            "green": 1 if (bk.get("data-green-star") or "").strip() not in ("", "False", "false") else 0,
+            "price": price if price.lower() != "none" else "",
+            "cuisine": cuisine,
+            "city": clean(bk.get("data-dtm-city")),
+            "loc": loc,
+            "cc": (bk.get("data-restaurant-country") or "").lower(),
+            "lat": lat, "lng": lng,
+            "path": href[len("/sg/zh_CN"):] if href.startswith("/sg/zh_CN") else href,
+        })
+    total = None
+    m = re.search(r"/\s*([\d,]+)\s*家餐馆", page_html) or re.search(r"共\s*([\d,]+)\s*個餐廳", page_html)
+    if m:
+        total = int(m.group(1).replace(",", ""))
+    pages = [int(x) for x in re.findall(r"/restaurants/page/(\d+)", page_html)]
+    return out, total, (max(pages) if pages else 1)
 
 
-def iter_jsonld(page):
-    for m in re.finditer(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', page, re.S | re.I):
+def iter_jsonld(page_html):
+    for m in re.finditer(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', page_html, re.S | re.I):
         try:
             obj = json.loads(m.group(1).strip())
         except Exception:
@@ -150,138 +166,176 @@ def iter_jsonld(page):
                     stack.append(o["@graph"])
 
 
-def parse_detail(page):
+def fmt_phone(p):
+    raw = re.sub(r"[^\d+]", "", p or "")
+    m = re.match(r"\+86(20|10|21|2\d)(\d{4})(\d{4})$", raw) or re.match(r"\+86(1\d{2})(\d{4})(\d{4})$", raw)
+    if m:
+        return f"+86 {m.group(1)} {m.group(2)} {m.group(3)}"
+    return clean(p)
+
+
+def parse_detail(page_html):
     d = {}
-    for o in iter_jsonld(page):
+    for o in iter_jsonld(page_html):
         t = o.get("@type")
         t = t if isinstance(t, list) else [t]
         if "Restaurant" not in t and "FoodEstablishment" not in t:
             continue
-        d["name"] = clean(o.get("name"))
         adr = o.get("address")
         if isinstance(adr, dict):
             d["addr"] = clean(adr.get("streetAddress") or "")
         elif isinstance(adr, str):
             d["addr"] = clean(adr)
-        d["phone"] = clean(o.get("telephone"))
-        cui = o.get("servesCuisine")
-        if isinstance(cui, list):
-            cui = cui[0] if cui else ""
-        d["cuisine"] = clean(cui)
-        geo = o.get("geo") or {}
-        lat = o.get("latitude", geo.get("latitude") if isinstance(geo, dict) else None)
-        lng = o.get("longitude", geo.get("longitude") if isinstance(geo, dict) else None)
-        try:
-            d["lat"], d["lng"] = float(lat), float(lng)
-        except (TypeError, ValueError):
-            pass
+        d["phone"] = fmt_phone(o.get("telephone"))
         break
-
-    if "lat" not in d:
-        for pat in (r'lat=([0-9.]+)&(?:amp;)?lon=([0-9.]+)',
-                    r'data-lat="([0-9.]+)"[^>]*?data-lng="([0-9.]+)"',
-                    r'"latitude"\s*:\s*"?([0-9.]+)"?\s*,\s*"longitude"\s*:\s*"?([0-9.]+)'):
-            m = re.search(pat, page)
-            if m:
-                d["lat"], d["lng"] = float(m.group(1)), float(m.group(2))
-                break
-
-    if not d.get("addr"):
-        m = re.search(r'google\.com/maps/embed[^"\']*?[?&](?:amp;)?q=([^&"\']+)', page)
-        if m:
-            d["addr"] = clean(urllib.parse.unquote_plus(m.group(1)))
     if not d.get("phone"):
-        m = re.search(r'href="tel:([^"]+)"', page)
+        m = re.search(r'href="tel:([^"]+)"', page_html)
         if m:
-            d["phone"] = clean(m.group(1))
+            d["phone"] = fmt_phone(m.group(1))
     if d.get("addr"):
-        d["addr"] = short_addr(d["addr"])
-    if d.get("phone"):
-        p = re.sub(r"[^\d+]", "", d["phone"])
-        m = re.match(r"\+86(20)(\d{4})(\d{4})$", p) or re.match(r"\+86(1\d{2})(\d{4})(\d{4})$", p)
-        d["phone"] = f"+86 {m.group(1)} {m.group(2)} {m.group(3)}" if m else d["phone"]
+        d["addr"] = re.sub(r",\s*(Guangzhou|广州)(,.*)?$", "", d["addr"]).strip(" ,")
     return d
 
 
-def in_gz(lat, lng):
-    return lat is not None and lng is not None and 22.4 < lat < 23.95 and 112.9 < lng < 114.1
+# ---------------------------------------------------------------- 数据读写
+def load():
+    if not DATA.exists():
+        return {}, {}
+    raw = json.loads(DATA.read_text("utf-8"))
+    rows = {}
+    if "rows" in raw:
+        f = raw["fields"]
+        for r in raw["rows"]:
+            o = dict(zip(f, r))
+            rows[o["id"]] = o
+    elif "restaurants" in raw:  # 旧版广州名单：只取地址电话，按路径匹配
+        for r in raw["restaurants"]:
+            path = r.get("url", "").split("guide.michelin.com")[-1].replace("/sg/zh_CN", "")
+            rows["old:" + path] = {"path": path, "addr": r.get("addr", ""), "phone": r.get("phone", "")}
+    return raw, rows
+
+
+def save(meta, rows):
+    order = {"3": 0, "2": 1, "1": 2, "b": 3, "s": 4}
+    rs = sorted(rows.values(), key=lambda o: (order.get(o["dist"], 9), o["cc"], o["city"], o["name"]))
+    data = {
+        "updated": TODAY,
+        "list_updated": meta.get("list_updated", TODAY),
+        "source": LIST_URL,
+        "count": len(rs),
+        "fields": FIELDS,
+        "rows": [[o.get(k) if o.get(k) is not None else ("" if k not in ("lat", "lng") else None) for k in FIELDS] for o in rs],
+    }
+    if DATA.exists():
+        try:
+            old = json.loads(DATA.read_text("utf-8"))
+            if old.get("rows") == data["rows"] and old.get("list_updated") == data["list_updated"]:
+                log("名单内容没有变化，不写文件")
+                return
+        except Exception:
+            pass
+    DATA.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n", "utf-8")
 
 
 # ---------------------------------------------------------------- 主流程
+def run_list(br, prev):
+    first_html = br.get(LIST_URL, "div.card__menu.js-restaurant__list_item")[1]
+    cards, total, last = parse_list(first_html)
+    log(f"列表共 {total} 家，{last} 页")
+    got = {c["id"]: c for c in cards}
+    fails = 0
+    for n in range(2, last + 1):
+        try:
+            _, h = br.get(f"{LIST_URL}/page/{n}", "div.card__menu.js-restaurant__list_item")
+            for c in parse_list(h)[0]:
+                got[c["id"]] = c
+        except Exception as e:
+            fails += 1
+            log(f"  第 {n} 页失败: {e}")
+            if fails > 20:
+                raise RuntimeError("列表页失败过多，放弃")
+        if n % 25 == 0:
+            log(f"  已抓 {n}/{last} 页，累计 {len(got)} 家")
+        time.sleep(0.8)
+
+    real_prev = {k: v for k, v in prev.items() if not str(k).startswith("old:")}
+    floor = max(1000, int(len(real_prev) * 0.6))
+    if len(got) < floor:
+        log(f"只抓到 {len(got)} 家，低于安全下限 {floor}，不更新。")
+        sys.exit(2)
+
+    initial = len(real_prev) < 1000          # 首次全球抓取：不把所有店都标成“新上榜”
+    old_by_path = {v["path"]: v for k, v in prev.items() if str(k).startswith("old:")}
+    rows = {}
+    for i, c in got.items():
+        p = real_prev.get(i) or old_by_path.get(c["path"]) or {}
+        c["addr"] = p.get("addr", "")
+        c["phone"] = p.get("phone", "")
+        c["added"] = p.get("added", "") if i in real_prev else ("" if initial else TODAY)
+        rows[i] = c
+    new = [i for i in rows if i not in real_prev]
+    gone = [i for i in real_prev if i not in rows]
+    log(f"列表完成：共 {len(rows)} 家，新增 {0 if initial else len(new)}，下榜 {len(gone)}")
+    return rows
+
+
+def run_details(br, rows, minutes):
+    todo = [o for o in rows.values() if not o.get("addr") and o.get("path")]
+    rank = {cc: i for i, cc in enumerate(PRIORITY)}
+    dist_rank = {"3": 0, "2": 1, "1": 2, "b": 3, "s": 4}
+    todo.sort(key=lambda o: (rank.get(o["cc"], 99), dist_rank.get(o["dist"], 9)))
+    log(f"待补地址 {len(todo)} 家，本次最多 {minutes} 分钟")
+    t_end = time.time() + minutes * 60
+    done = miss = 0
+    for o in todo:
+        if time.time() > t_end:
+            break
+        try:
+            status, h = br.get(SITE + o["path"], "script[type='application/ld+json']", tries=2)
+            d = parse_detail(h) if status == 200 else {}
+        except Exception as e:
+            log(f"  详情失败 {o['path']}: {e}")
+            d = {}
+        if d.get("addr"):
+            o["addr"] = d["addr"]
+            o["phone"] = d.get("phone", "") or o.get("phone", "")
+            done += 1
+        else:
+            miss += 1
+        if (done + miss) % 100 == 0:
+            log(f"  详情进度 {done + miss}，成功 {done}")
+        time.sleep(0.6)
+    log(f"详情完成：补到 {done} 家，失败 {miss} 家，剩余约 {len(todo) - done - miss} 家")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--browser", action="store_true")
+    ap.add_argument("--list", action="store_true", help="强制刷新列表")
+    ap.add_argument("--details", type=float, default=60, help="详情阶段时间预算（分钟），0 表示跳过")
     args = ap.parse_args()
 
-    old = json.loads(DATA.read_text("utf-8")) if DATA.exists() else {"restaurants": []}
-    prev = {r["slug"]: r for r in old.get("restaurants", [])}
+    meta, prev = load()
+    real_prev = {k: v for k, v in prev.items() if not str(k).startswith("old:")}
+    need_list = args.list or len(real_prev) < 1000
+    if not need_list and meta.get("list_updated"):
+        age = (dt.date.fromisoformat(TODAY) - dt.date.fromisoformat(meta["list_updated"])).days
+        need_list = age >= LIST_INTERVAL_DAYS
 
-    f = Fetcher(browser=args.browser)
+    br = Browser()
     try:
-        cards, seen = [], set()
-        for n in range(1, 11):
-            url = LIST_URL if n == 1 else f"{LIST_URL}/page/{n}"
-            page = f.get(url)
-            got = [c for c in parse_listing(page) if c[0] not in seen]
-            print(f"列表第 {n} 页: {len(got)} 家")
-            if not got:
-                break
-            cards += got
-            seen.update(c[0] for c in got)
-            if not re.search(r'/bib-gourmand/page/%d["?]' % (n + 1), page):
-                break
-            time.sleep(1)
-
-        floor = max(20, int(len(prev) * 0.6))
-        if len(cards) < floor:
-            print(f"只抓到 {len(cards)} 家，低于安全下限 {floor}，不更新。", file=sys.stderr)
-            sys.exit(2)
-
-        out, failed = [], []
-        for slug, name, price, cuisine, lat, lng in cards:
-            url = f"{BASE}/sg/zh_CN/guangdong-province/guangzhou/restaurant/{slug}"
-            try:
-                d = parse_detail(f.get(url))
-            except Blocked:
-                raise
-            except Exception as e:
-                print(f"  详情失败 {slug}: {e}", file=sys.stderr)
-                d = {}
-            p = prev.get(slug, {})
-            r = {
-                "slug": slug,
-                "name": name or d.get("name") or p.get("name", ""),
-                "price": price or p.get("price", ""),
-                "cuisine": cuisine or p.get("cuisine") or d.get("cuisine", ""),
-                "addr": d.get("addr") or p.get("addr", ""),
-                "phone": d.get("phone") or p.get("phone", ""),
-                "lat": None, "lng": None,
-                "url": url,
-                "added": p["added"] if slug in prev else TODAY,
-            }
-            for la, ln in ((d.get("lat"), d.get("lng")), (lat, lng), (p.get("lat"), p.get("lng"))):
-                if in_gz(la, ln):
-                    r["lat"], r["lng"] = round(la, 7), round(ln, 7)
-                    break
-            if not r["addr"]:
-                failed.append(slug)
-            out.append(r)
-            time.sleep(0.6)
+        if need_list:
+            rows = run_list(br, prev)
+            meta["list_updated"] = TODAY
+        else:
+            rows = real_prev
+            log(f"列表 {meta.get('list_updated')} 刚更新过，本次只补详情")
+        save(meta, rows)  # 列表结果先落盘，详情阶段中断也不丢
+        if args.details > 0:
+            run_details(br, rows, args.details)
+            save(meta, rows)
     finally:
-        f.close()
-
-    new_slugs = [r["slug"] for r in out if r["slug"] not in prev]
-    gone = [s for s in prev if s not in {r["slug"] for r in out}]
-    data = {"updated": TODAY, "source": LIST_URL, "count": len(out), "restaurants": out}
-    DATA.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", "utf-8")
-    print(f"完成: 共 {len(out)} 家，新增 {len(new_slugs)} {new_slugs}，下榜 {len(gone)} {gone}")
-    if failed:
-        print(f"缺少地址: {failed}", file=sys.stderr)
+        br.close()
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Blocked as e:
-        print(f"被网站拦截: {e}", file=sys.stderr)
-        sys.exit(3)
+    main()
