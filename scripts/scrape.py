@@ -245,22 +245,47 @@ def run_list(br, prev):
     cards, total, last = parse_list(first_html)
     log(f"列表共 {total} 家，{last} 页")
     got = {c["id"]: c for c in cards}
-    fails = 0
+    failed = []
     for n in range(2, last + 1):
         try:
             _, h = br.get(f"{LIST_URL}/page/{n}", "div.card__menu.js-restaurant__list_item")
             for c in parse_list(h)[0]:
                 got[c["id"]] = c
         except Exception as e:
-            fails += 1
+            failed.append(n)
             log(f"  第 {n} 页失败: {e}")
-            if fails > 20:
+            if len(failed) > 60:
                 raise RuntimeError("列表页失败过多，放弃")
         if n % 25 == 0:
             log(f"  已抓 {n}/{last} 页，累计 {len(got)} 家")
         time.sleep(0.8)
+    # 失败的页面歇一会儿再统一重试两轮
+    for rnd in (1, 2):
+        if not failed:
+            break
+        log(f"重试失败页面（第 {rnd} 轮）: {failed}")
+        time.sleep(30)
+        again = []
+        for n in failed:
+            try:
+                _, h = br.get(f"{LIST_URL}/page/{n}", "div.card__menu.js-restaurant__list_item")
+                for c in parse_list(h)[0]:
+                    got[c["id"]] = c
+            except Exception as e:
+                again.append(n)
+            time.sleep(2)
+        failed = again
+    if failed:
+        log(f"仍有 {len(failed)} 页失败，这些页的餐厅沿用上次数据: {failed}")
 
     real_prev = {k: v for k, v in prev.items() if not str(k).startswith("old:")}
+    if failed and real_prev:
+        keep = 0
+        for i, o in real_prev.items():
+            if i not in got:
+                got[i] = {k: o.get(k) for k in FIELDS if k not in ("addr", "phone", "added")}
+                keep += 1
+        log(f"沿用上次数据 {keep} 家")
     floor = max(1000, int(len(real_prev) * 0.6))
     if len(got) < floor:
         log(f"只抓到 {len(got)} 家，低于安全下限 {floor}，不更新。")

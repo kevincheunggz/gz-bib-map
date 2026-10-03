@@ -248,6 +248,7 @@ const CITY = {"广州":"Guangzhou","北京":"Beijing","上海":"Shanghai","成�
   "布拉格":"Prague","布达佩斯":"Budapest","华沙":"Warsaw","雅典":"Athens","摩纳哥":"Monaco","纽约":"New York","芝加哥":"Chicago","旧金山":"San Francisco",
   "洛杉矶":"Los Angeles","华盛顿":"Washington","迈阿密":"Miami","奥兰多":"Orlando","亚特兰大":"Atlanta","多伦多":"Toronto","温哥华":"Vancouver",
   "蒙特利尔":"Montreal","墨西哥城":"Mexico City","圣保罗":"São Paulo","里约":"Rio de Janeiro","布宜诺斯艾利斯":"Buenos Aires"};
+const CITY_ALT = {"迪拜":"杜拜","阿布扎比":"阿布扎比"};
 const CITY_REV = Object.fromEntries(Object.entries(CITY).map(([zh,en])=>[en.toLowerCase(),zh]));
 
 /* ================= 状态 ================= */
@@ -313,11 +314,24 @@ async function loadData(){
 }
 
 /* ================= 筛选 ================= */
+/* 搜索：按空格拆词，每个词都要匹配；城市、国家支持中文名，星级词直接按星级筛选 */
+const DIST_WORDS={"三星":"#3","二星":"#2","两星":"#2","一星":"#1","必比登":"#b","入选":"#s","星级":"#star","米其林星":"#star"};
+function tokenAlts(t){
+  const alts=[t];
+  if(DIST_WORDS[t]) return [DIST_WORDS[t]];
+  for(const [zh,en] of Object.entries(CITY)) if(t.includes(zh)) alts.push(t.replace(zh,en.toLowerCase()).trim());
+  for(const [zh,v] of Object.entries(CITY_ALT)) if(t.includes(zh)) alts.push(t.replace(zh,v).trim());
+  for(const [cc,zh] of Object.entries(COUNTRY)) if(t===zh || t===zh.replace(/^中国/,"")) alts.push("@"+cc);
+  return alts;
+}
 function qTerms(q){
-  q=q.trim().toLowerCase(); if(!q) return null;
-  const alt=[]; for(const [zh,en] of Object.entries(CITY)) if(q.includes(zh)) alt.push(q.replace(zh,en.toLowerCase()).trim());
-  for(const [cc,zh] of Object.entries(COUNTRY)) if(q===zh || q===zh.replace(/^中国/,"")) alt.push("@"+cc);
-  return [q].concat(alt);
+  const toks=q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return toks.length ? toks.map(tokenAlts) : null;
+}
+function altMatch(r,a){
+  if(a[0]==="@") return r.cc===a.slice(1);
+  if(a[0]==="#"){ const d=a.slice(1); return d==="star" ? "123".includes(r.dist) : r.dist===d; }
+  return r.hay.includes(a);
 }
 function visible(r){
   const f=S.filt;
@@ -328,7 +342,7 @@ function visible(r){
     else if(r.dist!==f.dist) return false;
   }
   if(f.lvl && r.lvl!==f.lvl) return false;
-  if(f.terms && !f.terms.some(t=> t[0]==="@" ? r.cc===t.slice(1) : r.hay.includes(t))) return false;
+  if(f.terms && !f.terms.every(alts=>alts.some(a=>altMatch(r,a)))) return false;
   return true;
 }
 function buildChips(){
@@ -336,7 +350,8 @@ function buildChips(){
   S.rows.forEach(r=>{ cnt[r.dist]++; if(r.green) cnt.green++; if(r.fresh) cnt.new++; });
   const star=cnt[3]+cnt[2]+cnt[1];
   const items=[["","全部",S.rows.length,null],["star","星级",star,"#c8102e"],["3","三星",cnt[3],DIST[3].c],["2","二星",cnt[2],DIST[2].c],["1","一星",cnt[1],DIST[1].c],
-    ["b","必比登",cnt.b,DIST.b.c],["s","入选",cnt.s,DIST.s.c],["green","绿星",cnt.green,"#2e8b57"]];
+    ["b","必比登",cnt.b,DIST.b.c],["s","入选",cnt.s,DIST.s.c]];
+  if(cnt.green) items.push(["green","绿星",cnt.green,"#2e8b57"]);
   if(cnt.new) items.push(["new","新上榜",cnt.new,null]);
   $("#chips").innerHTML=items.map(([k,t,n,c])=>`<button class="chip${S.filt.dist===k?" on":""}${k==="new"?" new":""}" data-d="${k}">${c?`<i style="background:${c}"></i>`:""}${t}<span class="n">${fmtN(n)}</span></button>`).join("");
   document.querySelectorAll("#chips .chip").forEach(el=>el.onclick=()=>{ S.filt.dist=el.dataset.d; buildChips(); onFilter(); });
@@ -551,7 +566,7 @@ function buildRegions(){
     $("#regionPanel").classList.remove("show");
     const cc=b.dataset.cc;
     if(cc==="@me"){ locate(); return; }
-    if(!S.map){ toast("地图未加载，已在列表中按地区筛选"); $("#q").value=COUNTRY[cc]||""; S.filt.terms=cc==="@world"?null:["@"+cc]; S.filt.q=$("#q").value; onFilter(); return; }
+    if(!S.map){ toast("地图未加载，已在列表中按地区筛选"); $("#q").value=COUNTRY[cc]||""; S.filt.terms=cc==="@world"?null:[["@"+cc]]; S.filt.q=$("#q").value; onFilter(); return; }
     if(cc==="@world"){ S.map.centerAndZoom(new BMX.Point(60,30),2); return; }
     fitPoints(S.rows.filter(r=>r.cc===cc).map(posOf).filter(Boolean));
   });
