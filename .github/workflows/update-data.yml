@@ -1,0 +1,67 @@
+name: 每月更新餐厅名单
+
+on:
+  schedule:
+    - cron: "17 2 1 * *"   # 每月 1 日北京时间 10:17
+  workflow_dispatch:        # 也可在 Actions 页面手动运行
+  push:
+    branches: [main]
+    paths: ["scripts/**", ".github/workflows/update-data.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: pip install requests beautifulsoup4
+
+      - name: 抓取米其林名单
+        id: scrape
+        run: |
+          set +e
+          python scripts/scrape.py
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ $code -ne 0 ] && [ $code -ne 3 ]; then exit $code; fi
+          exit 0
+
+      - name: 普通请求被拦截时改用无头浏览器
+        if: steps.scrape.outputs.code == '3'
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+          python scripts/scrape.py --browser
+
+      - name: 提交变化
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add data/restaurants.json
+          if git diff --cached --quiet; then
+            echo "名单无变化"; echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "更新必比登名单 $(date -u -d '+8 hour' +%F)"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 刷新 jsDelivr 缓存
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          sleep 20
+          curl -fsS "https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}@main/data/restaurants.json" || true
