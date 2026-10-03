@@ -63,6 +63,16 @@
   .fab svg{width:20px;height:20px}
   .fab.on{color:var(--me)}
 
+  .mapwarn{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top) + 112px);z-index:45;background:#fff;border-radius:14px;
+    box-shadow:0 4px 16px rgba(0,0,0,.16);padding:14px 14px 12px;display:none;font-size:13px;line-height:1.6;max-height:52vh;overflow-y:auto}
+  .mapwarn.show{display:block}
+  .mapwarn h3{margin:0 0 4px;font-size:15px;color:var(--red)}
+  .mapwarn .why{margin:6px 0;padding:8px 10px;background:#fff4f2;border-radius:8px;color:#7a1020;word-break:break-all}
+  .mapwarn ul{margin:4px 0 8px;padding-left:18px;color:#444}
+  .mapwarn pre{white-space:pre-wrap;word-break:break-all;background:var(--chip);border-radius:8px;padding:8px;font-size:11.5px;margin:6px 0;color:#333;max-height:140px;overflow-y:auto}
+  .mapwarn .btns{display:flex;gap:8px;margin-top:8px}
+  .mapwarn button{flex:1;border:0;border-radius:10px;padding:9px;font-size:13.5px;background:var(--chip);color:var(--ink)}
+  .mapwarn button.pri{background:var(--red);color:#fff}
   .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 112px);transform:translateX(-50%);z-index:40;background:rgba(29,29,31,.88);color:#fff;font-size:12.5px;
     padding:7px 12px;border-radius:9px;max-width:86vw;text-align:center;opacity:0;transition:opacity .25s;pointer-events:none}
   .toast.show{opacity:1}
@@ -123,6 +133,13 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="mapwarn" id="mapwarn">
+  <h3>地图底图没有加载出来</h3>
+  <div class="why" id="mwWhy">百度地图没有返回底图。</div>
+  <ul id="mwTips"></ul>
+  <pre id="mwLog"></pre>
+  <div class="btns"><button id="mwCopy">复制诊断信息</button><button id="mwClose">关闭</button><button class="pri" id="mwAk">重新填写 AK</button></div>
+</div>
 
 <div class="setup" id="setup">
   <h2>连接百度地图</h2>
@@ -139,6 +156,16 @@
 </div>
 
 <script>
+/* ================= 诊断：收集页面与百度地图的报错 ================= */
+const DIAG = [];
+function diag(m){ m=String(m==null?"":m).slice(0,400); if(!m) return; DIAG.push(new Date().toTimeString().slice(0,8)+" "+m); if(DIAG.length>30) DIAG.shift(); }
+window.addEventListener("error", e=>{ if(e.target && e.target!==window && e.target.src) diag("资源加载失败: "+e.target.src.split("?")[0]); else diag("脚本错误: "+(e.message||"")+(e.filename?" @"+e.filename.split("/").pop().split("?")[0]+":"+e.lineno:"")); }, true);
+window.addEventListener("unhandledrejection", e=>diag("异步错误: "+((e.reason&&e.reason.message)||e.reason)));
+["error","warn"].forEach(k=>{ const o=console[k]; console[k]=function(){ try{ diag("控制台"+(k==="error"?"错误":"警告")+": "+Array.from(arguments).map(x=>typeof x==="object"?JSON.stringify(x):String(x)).join(" ")); }catch(e){} return o.apply(console,arguments); }; });
+// 百度地图在 AK 校验失败、配额超限时通常用弹窗提示，这里截下来显示在诊断卡片里
+window.alert = function(m){ diag("百度提示: "+m); S && (S.baiduMsg = String(m)); if(window.showMapProblem) showMapProblem(); };
+function hasWebGL(){ try{ const c=document.createElement("canvas"); return !!(c.getContext("webgl")||c.getContext("experimental-webgl")); }catch(e){ return false; } }
+
 /* ================= 基础 ================= */
 const P = new URLSearchParams(location.search);
 const REPO = P.get("repo") || "";
@@ -346,13 +373,42 @@ window.__bdInit = function(){
   map.enableScrollWheelZoom(true);
   map.addControl(new BMapGL.ScaleControl({anchor:BMAP_ANCHOR_TOP_LEFT, offset:new BMapGL.Size(14,118)}));
   $("#nomap").style.display="none"; $("#setup").classList.remove("show");
-  S.rows.forEach(placeMarker); if(S.me){ showMe(false); fitNear(); } else fitAll(); geocodeAll();
+  diag("地图对象已创建");
+  S.tilesOk=false;
+  map.addEventListener("tilesloaded", ()=>{ if(!S.tilesOk) diag("底图已加载"); S.tilesOk=true; $("#mapwarn").classList.remove("show"); });
+  setTimeout(()=>{ if(!S.tilesOk) showMapProblem(); }, 9000);
+  try{ S.rows.forEach(placeMarker); if(S.me){ showMe(false); fitNear(); } else fitAll(); geocodeAll(); }
+  catch(e){ diag("标记绘制出错: "+e.message); }
 };
+function showMapProblem(){
+  const ak=store("bib_ak")||"", gl=hasWebGL(), msg=S.baiduMsg||"";
+  let why, tips;
+  if(!gl){
+    why="手机的系统 WebView 不支持 WebGL，百度新版地图需要它。";
+    tips=["到应用商店更新“Android System WebView”和 Chrome","更新后重新打开本 App"];
+  } else if(/配额|quota|超限|超过/i.test(msg)){
+    why="百度提示："+msg;
+    tips=["这个 AK 今天的调用额度用完了，明天零点会自动恢复","也可以在百度控制台新建一个浏览器端 AK 换上"];
+  } else if(msg){
+    why="百度提示："+msg;
+    tips=["到百度控制台核对这个 AK：应用类型是“浏览器端”，Referer 白名单是 *，状态为启用","核对无误后点“重新填写 AK”再粘贴一次"];
+  } else {
+    why="百度地图没有返回底图，也没有给出具体原因。";
+    tips=["到百度控制台核对这个 AK：应用类型是“浏览器端”，Referer 白名单只填一个 *，状态为启用","查看该 AK 当天的调用量是否已满","关闭 VPN 或代理后重新打开 App"];
+  }
+  $("#mwWhy").textContent=why;
+  $("#mwTips").innerHTML=tips.map(t=>"<li>"+esc(t)+"</li>").join("");
+  const info=["App 版本: "+(P.get("v")||"-"),"WebGL: "+(gl?"支持":"不支持"),"AK: "+(ak?ak.slice(0,4)+"…"+ak.slice(-4)+"（"+ak.length+" 位）":"未填写"),
+    "页面地址: "+location.origin,"浏览器: "+navigator.userAgent.replace(/^Mozilla\/5\.0 /,"")].concat(DIAG);
+  $("#mwLog").textContent=info.join("\n");
+  $("#mapwarn").classList.add("show");
+}
+window.showMapProblem = showMapProblem;
 function loadBaidu(ak){
   $("#akErr").textContent="正在加载地图……";
   const s=document.createElement("script");
   s.src=`https://api.map.baidu.com/api?v=1.0&type=webgl&ak=${enc(ak)}&callback=__bdInit`;
-  s.onerror=()=>{ $("#akErr").textContent="地图脚本加载失败，请检查网络。"; $("#setup").classList.add("show"); };
+  s.onerror=()=>{ diag("百度地图脚本加载失败"); $("#akErr").textContent="地图脚本加载失败，请检查网络。"; $("#setup").classList.add("show"); };
   document.head.appendChild(s);
   window.__bdTimer=setTimeout(()=>{ if(!S.map){ $("#akErr").textContent="地图没有加载成功。请确认 AK 类型是“浏览器端”、Referer 白名单为 *、应用已启用。"; $("#setup").classList.add("show"); } },10000);
 }
@@ -429,6 +485,13 @@ $("#akBtn").onclick = ()=>{
 };
 $("#locBtn").onclick = ()=>locate();
 $("#fitBtn").onclick = fitAll;
+$("#mwClose").onclick = ()=>$("#mapwarn").classList.remove("show");
+$("#mwAk").onclick = ()=>{ $("#mapwarn").classList.remove("show"); $("#setBtn").click(); };
+$("#mwCopy").onclick = async ()=>{
+  const t=$("#mwWhy").textContent+"\n"+$("#mwLog").textContent;
+  try{ await navigator.clipboard.writeText(t); toast("已复制，可以直接粘贴发给我"); }
+  catch(e){ const r=document.createRange(); r.selectNodeContents($("#mwLog")); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); toast("已选中诊断信息，长按复制"); }
+};
 
 /* ================= 启动 ================= */
 setSheet("");

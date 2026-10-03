@@ -76,6 +76,7 @@ public class MainActivity extends Activity {
             StringBuilder url = new StringBuilder("https://" + HOME_HOST + "/assets/index.html?repo=")
                     .append(Uri.encode(BuildConfig.REPO));
             if (!BuildConfig.BAIDU_AK.isEmpty()) url.append("&ak=").append(Uri.encode(BuildConfig.BAIDU_AK));
+            url.append("&v=").append(Uri.encode(BuildConfig.VERSION_NAME));
             web.loadUrl(url.toString());
         }
     }
