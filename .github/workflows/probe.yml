@@ -1,0 +1,28 @@
+name: probe
+on:
+  push:
+    branches: [probe]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p probe
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+          get(){ curl -sSL -A "$UA" -H "Accept-Language: zh-CN,zh;q=0.9" -o "probe/$1" -w "$1 %{http_code} %{size_download}\n" "$2" >> probe/status.txt; sleep 2; }
+          B=https://guide.michelin.com/sg/zh_CN
+          get star1_p1.html  "$B/restaurants/1-star-michelin"
+          get star1_p30.html "$B/restaurants/1-star-michelin/page/30"
+          get star3_p1.html  "$B/restaurants/3-stars-michelin"
+          get bib_p1.html    "$B/restaurants/bib-gourmand"
+          get allstar_p1.html "$B/restaurants/all-starred"
+          get detail_jp.html "$B/tokyo-region/tokyo/restaurant/quintessence"
+          get detail_fr.html "$B/ile-de-france/paris/restaurant/arpege"
+          get detail_gz.html "$B/guangdong-province/guangzhou/restaurant/nan-yuan"
+          cat probe/status.txt
+          git config user.name probe; git config user.email probe@example.com
+          git checkout -b probe-out
+          git add probe && git commit -qm "probe output" && git push -f origin probe-out
