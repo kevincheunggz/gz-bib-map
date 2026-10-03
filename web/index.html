@@ -95,12 +95,18 @@
   .setup .err{color:var(--red);font-size:13px;margin-top:10px;min-height:1em}
 
   /* 信息窗 */
-  .iw{font-size:13px;line-height:1.6;max-width:240px}
-  .iw .t{font-weight:600;font-size:15px;margin-bottom:2px}
-  .iw .s{color:var(--muted);font-size:12px}
-  .iw .acts{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
-  .iw a{display:inline-block;text-decoration:none;font-size:12.5px;padding:4px 9px;border-radius:7px;background:var(--chip);color:var(--ink)}
-  .iw a.pri{background:var(--red);color:#fff}
+  .card{position:fixed;left:12px;right:12px;bottom:calc(102px + env(safe-area-inset-bottom));z-index:25;background:var(--card);border-radius:16px;
+    box-shadow:0 6px 22px rgba(0,0,0,.18);padding:14px 14px 12px;display:none}
+  .card.show{display:block}
+  .card .x{position:absolute;right:6px;top:6px;width:36px;height:36px;border:0;background:transparent;font-size:22px;color:var(--muted);line-height:1}
+  .card .ct{display:flex;align-items:center;gap:8px;font-weight:600;font-size:17px;padding-right:30px}
+  .card .cs{color:var(--muted);font-size:12.5px;margin-top:4px}
+  .card .ca{color:#333;font-size:13.5px;margin-top:4px;line-height:1.5}
+  .card .cb{display:flex;gap:8px;margin-top:12px}
+  .card .cb a{flex:1;display:flex;align-items:center;justify-content:center;min-height:42px;border-radius:11px;background:var(--chip);color:var(--ink);
+    text-decoration:none;font-size:14.5px;font-weight:500}
+  .card .cb a.pri{background:var(--red);color:#fff}
+  .card .cb a.off{opacity:.4;pointer-events:none}
 </style>
 </head>
 <body>
@@ -133,6 +139,13 @@
   <div class="list" id="list"></div>
 </div>
 
+<div class="card" id="card">
+  <button class="x" id="cardX" aria-label="关闭">×</button>
+  <div class="ct"><span class="num" id="cNum"></span><span id="cName"></span></div>
+  <div class="cs" id="cSub"></div>
+  <div class="ca" id="cAddr"></div>
+  <div class="cb"><a class="pri" id="cNav">导航</a><a id="cTel">电话</a><a id="cMic">米其林点评</a></div>
+</div>
 <div class="toast" id="toast"></div>
 <div class="mapwarn" id="mapwarn">
   <h3 id="mwTitle">地图没有正常显示</h3>
@@ -292,9 +305,10 @@ function refresh(updateMarkers){
 const sheet=$("#sheet");
 function setSheet(state){
   sheet.classList.remove("min","full"); if(state) sheet.classList.add(state);
+  if(state!=="min" && S.cardOpen){ S.cardOpen=false; $("#card").classList.remove("show"); }
   const h = state==="min" ? 92 : state==="full" ? 0 : window.innerHeight*0.44;
   $("#fabs").style.bottom = (h+12)+"px";
-  $("#fabs").style.display = state==="full" ? "none" : "flex";
+  $("#fabs").style.display = (state==="full" || S.cardOpen) ? "none" : "flex";
 }
 $("#handle").onclick = e=>{
   if(e.target.closest(".seg")) return;
@@ -320,7 +334,7 @@ function placeMarker(r){
   let m = S.markers[r.slug];
   if(!m){
     m = new BMX.Marker(bpt(p), {icon:pinIcon(r,S.sel===r.slug), title:r.name});
-    m.addEventListener("click", ()=>focusOn(r.slug,false));
+    m.addEventListener("click", e=>{ S.markerTap=Date.now(); if(e && e.domEvent && e.domEvent.stopPropagation) e.domEvent.stopPropagation(); focusOn(r.slug,false); });
     S.map.addOverlay(m); S.markers[r.slug]=m;
     if(!visible(r)) m.hide();
   } else m.setPosition(bpt(p));
@@ -341,13 +355,26 @@ function focusOn(slug, fromList){
   if(!m || !p){ toast("这家暂无坐标，已打开百度地图搜索"); location.href=searchUrl(r); return; }
   m.setIcon(pinIcon(r,true));
   if(fromList){ setSheet("min"); S.map.centerAndZoom(m.getPosition(), Math.max(S.map.getZoom(),16)); }
-  const d=distOf(r);
-  const html = `<div class="iw"><div class="t">${r.id}. ${esc(r.name)}</div>
-    <div class="s">${esc(r.cuisine)} · ${esc(r.price)} · 必比登推介${d!=null?" · 距你 "+fmtDist(d):""}</div>
-    <div>${esc(r.addr)}</div>
-    <div class="acts"><a class="pri" href="${navUrl(r,p)}">导航</a>${r.phone?`<a href="tel:${esc(r.phone.replace(/\s/g,""))}">电话</a>`:""}<a href="${esc(r.url)}">米其林点评</a></div></div>`;
-  S.map.openInfoWindow(new BMX.InfoWindow(html,{width:0,offset:new BMX.Size(0,-34)}), m.getPosition());
+  openCard(r, p);
   refresh(false);
+}
+function openCard(r, p){
+  const d=distOf(r);
+  $("#cNum").textContent=r.id; $("#cNum").className="num "+(r.price==="¥"?"p1":"p2");
+  $("#cName").textContent=r.name;
+  $("#cSub").textContent=`${r.cuisine} · ${r.price} · 必比登推介`+(d!=null?" · 距你 "+fmtDist(d):"");
+  $("#cAddr").textContent=r.addr;
+  $("#cNav").href = p ? navUrl(r,p) : searchUrl(r);
+  const tel=(r.phone||"").replace(/\s/g,"");
+  $("#cTel").href = tel ? "tel:"+tel : "#"; $("#cTel").classList.toggle("off", !tel);
+  $("#cMic").href = r.url;
+  S.cardOpen=true; $("#card").classList.add("show"); setSheet("min");
+}
+function closeCard(){
+  if(!S.cardOpen) return;
+  S.cardOpen=false; $("#card").classList.remove("show");
+  if(S.sel && S.markers[S.sel]){ const r=S.rows.find(x=>x.slug===S.sel); if(r) S.markers[S.sel].setIcon(pinIcon(r,false)); }
+  S.sel=null; setSheet(""); refresh(false);
 }
 function fitAll(){
   if(!S.map) return;
@@ -380,6 +407,7 @@ window.__bdInit = function(){
   map.enableScrollWheelZoom(true);
   map.addControl(new BMX.ScaleControl({anchor:BMAP_ANCHOR_TOP_LEFT, offset:new BMX.Size(14,118)}));
   $("#nomap").style.display="none"; $("#setup").classList.remove("show");
+  map.addEventListener("click", ()=>{ if(Date.now()-(S.markerTap||0) < 500) return; closeCard(); });
   diag("地图对象已创建（"+(ENGINE==="gl"?"新版":"兼容版")+"）");
   setTimeout(()=>{ const el=$("#map"); diag("地图区域尺寸 "+el.offsetWidth+"×"+el.offsetHeight+"，定位 "+getComputedStyle(el).position);
     if(el.offsetHeight<100){ S.sizeBad=true; showMapProblem(); } }, 1500);
@@ -503,6 +531,10 @@ $("#akBtn").onclick = ()=>{
 };
 $("#locBtn").onclick = ()=>locate();
 $("#fitBtn").onclick = fitAll;
+$("#cardX").onclick = closeCard;
+// 安卓返回键：先关闭卡片或设置页，再退出
+window.__onBack = ()=>{ if($("#mapwarn").classList.contains("show")){ $("#mapwarn").classList.remove("show"); return true; }
+  if(S.cardOpen){ closeCard(); return true; } if($("#setup").classList.contains("show") && S.map){ $("#setup").classList.remove("show"); return true; } return false; };
 $("#mwSwitch").onclick = switchEngine;
 $("#engBtn").textContent = "地图模式：" + (ENGINE==="gl" ? "新版" : "兼容版");
 $("#engBtn").onclick = switchEngine;

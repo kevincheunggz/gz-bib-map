@@ -156,7 +156,11 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (web.canGoBack()) web.goBack();
-        else super.onBackPressed();
+        // 先让页面处理（关闭店铺卡片、诊断卡片、设置页），页面没处理再退出
+        web.evaluateJavascript("(window.__onBack && window.__onBack()) ? '1' : '0'", value -> {
+            if ("\"1\"".equals(value)) return;
+            if (web.canGoBack()) web.goBack();
+            else super.onBackPressed();
+        });
     }
 }
