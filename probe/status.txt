@@ -1,0 +1,7 @@
+requests gz_bib 202 2399
+browser all_p1 202 1156039 3.3s
+browser all_p200 200 1026910 1.5s
+browser star3_p1 200 941205 1.4s
+browser gz_bib 200 869045 1.3s
+browser detail_jp 404 356238 0.7s
+browser detail_gz 200 550266 0.7s
