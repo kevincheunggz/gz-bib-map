@@ -99,7 +99,7 @@ def parse_listing(page):
         if not a:
             continue
         m = re.search(r"/restaurant/([^/?#]+)", a["href"])
-        slug = m.group(1)
+        slug = urllib.parse.quote(urllib.parse.unquote(m.group(1)), safe="-_.~")
         if slug in seen:
             continue
         # 只要广州的卡片（页面底部有新加坡推荐卡）

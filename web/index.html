@@ -331,11 +331,8 @@ function geocodeAll(){
     const r=todo[i++];
     gc.getPoint("广州市"+r.addr, pt=>{
       let g={a:r.addr};
-      if(pt && inGZ(pt.lat,pt.lng)){
-        const p=[+pt.lat.toFixed(6), +pt.lng.toFixed(6)];
-        // 百度解析结果偏离米其林坐标太远时，多半是只解析到道路，改用米其林坐标
-        if(!(r.bd && haversine(p,r.bd)>2500)) g.pt=p;
-      }
+      // 优先用百度按地址解析的位置；米其林官网个别坐标有误（如雅苑），只作兜底
+      if(pt && inGZ(pt.lat,pt.lng)) g.pt=[+pt.lat.toFixed(6), +pt.lng.toFixed(6)];
       S.geo[r.slug]=g; placeMarker(r); setTimeout(next,150);
     },"广州市");
   };
